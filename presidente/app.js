@@ -57,6 +57,12 @@ function somar(mzs) {
     const d = B.d26[k]; if (d) for (let i = 0; i < 5; i++) o.d26[i] += d[i];
     for (let j = 0; j < E.deps.length; j++) { dv[j] += E.deps[j].votos[k] || 0; dval[j] += vals[j][k] || 0; }
   }
+  derivarP(o);
+  for (let j = 0; j < E.deps.length; j++) { o["dv" + j] = dv[j]; o["dp" + j] = dval[j] ? dv[j] / dval[j] : null; }
+  if (E.deps.length > 1) { let m = -1; for (let j = 0; j < E.deps.length; j++) if (o["dp" + j] != null && (m < 0 || o["dp" + j] > o["dp" + m])) m = j; o.melhor = m; }
+  return o;
+}
+function derivarP(o) {
   const tot = v => Object.values(v).reduce((x, y) => x + y, 0);
   o.t22 = tot(o.v22); o.t26 = tot(o.v26);
   const venc = v => Object.entries(v).sort((a, b) => b[1] - a[1])[0]?.[0];
@@ -68,8 +74,6 @@ function somar(mzs) {
   o.bn22 = o.d22[1] ? (o.d22[3] + o.d22[4]) / o.d22[1] : null; o.bn26 = o.d26[1] ? (o.d26[3] + o.d26[4]) / o.d26[1] : null;
   o.aptos = o.d26[0] || o.d22[0];
   o.virou = familia(o.venc22) !== familia(o.venc26);
-  for (let j = 0; j < E.deps.length; j++) { o["dv" + j] = dv[j]; o["dp" + j] = dval[j] ? dv[j] / dval[j] : null; }
-  if (E.deps.length > 1) { let m = -1; for (let j = 0; j < E.deps.length; j++) if (o["dp" + j] != null && (m < 0 || o["dp" + j] > o["dp" + m])) m = j; o.melhor = m; }
   return o;
 }
 function chaveDe(nivel, k) {
@@ -111,6 +115,154 @@ function posicoes(nivel, chave) {
 }
 const celTop = x => x ? `<span class="topcel">${avatar(x[0].foto, x[0].nome, "#2a333d", "av-m")}<span>${esc(x[0].nome)} <small>${esc(x[0].partido)} · ${int(x[1])}</small></span></span>` : "–";
 
+/* ---------------- animações: números contando e entrada suave */
+const calmo = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const NUM = /\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+(?:,\d+)?/g;
+function contar(el) {
+  if (calmo || el.dataset.contou === el.textContent) return;
+  const nos = []; const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT); while (w.nextNode()) { NUM.lastIndex = 0; if (NUM.test(w.currentNode.nodeValue)) nos.push([w.currentNode, w.currentNode.nodeValue]); }
+  if (!nos.length) return; el.dataset.contou = el.textContent;
+  const t0 = performance.now(), dur = 1000, ease = x => 1 - Math.pow(1 - x, 3);
+  const passo = agora => {
+    const k = ease(Math.min(1, (agora - t0) / dur));
+    for (const [n, orig] of nos) n.nodeValue = orig.replace(NUM, m => { if (/^20\d\d$/.test(m)) return m; const casas = (m.split(",")[1] || "").length, v = parseFloat(m.replace(/\./g, "").replace(",", ".")) * k; return v.toLocaleString("pt-BR", {minimumFractionDigits: casas, maximumFractionDigits: casas, useGrouping: m.includes(".") || v >= 10000}); });
+    if (k < 1) requestAnimationFrame(passo); else for (const [n, orig] of nos) n.nodeValue = orig;
+  };
+  requestAnimationFrame(passo);
+}
+const obsEntrada = "IntersectionObserver" in window ? new IntersectionObserver(es => es.forEach(e => { if (!e.isIntersecting) return; const el = e.target; el.classList.add("visto"); el.querySelectorAll("[data-conta]").forEach(contar); if (el.matches("[data-conta]")) contar(el); obsEntrada.unobserve(el); }), {threshold: .1}) : null;
+function animar(raiz) {
+  if (!raiz) return;
+  raiz.querySelectorAll(".dest b,.delta .v,.kpis b,.hero-num b,.hv b,.dep-num b,.cand .v b,.esc-kpis b").forEach(b => { b.setAttribute("data-conta", ""); delete b.dataset.contou; });
+  raiz.querySelectorAll(".dest,.card,.passos li,.sec-cab").forEach((el, i) => { if (el.classList.contains("anim")) { el.querySelectorAll("[data-conta]").forEach(contar); return; } el.classList.add("anim"); el.style.setProperty("--atraso", (i % 6) * 55 + "ms"); if (obsEntrada) obsEntrada.observe(el); else el.classList.add("visto"); });
+}
+
+/* ---------------- destaque no mapa ao passar o mouse e "ver no mapa" */
+E.reg = {};
+function registrar(mapa, chave, ly) { const m = E.reg[mapa] || (E.reg[mapa] = new Map()); if (!m.has(chave)) m.set(chave, []); m.get(chave).push(ly); }
+function destacar(chave, liga) {
+  for (const m of Object.values(E.reg)) for (const ly of m.get(chave) || []) {
+    if (!ly._map) continue;
+    if (liga) { if (!ly._orig) ly._orig = {color: ly.options.color, weight: ly.options.weight, fillOpacity: ly.options.fillOpacity, raio: ly.getRadius?.()}; ly.setStyle({color: "#ffffff", weight: ly.getRadius ? 3 : 2.6, fillOpacity: 1}); if (ly.getRadius) ly.setRadius(ly._orig.raio * 1.6); ly.bringToFront?.(); }
+    else if (ly._orig) { ly.setStyle({color: ly._orig.color, weight: ly._orig.weight, fillOpacity: ly._orig.fillOpacity}); if (ly.getRadius) ly.setRadius(ly._orig.raio); }
+  }
+}
+let hoverAtual = null;
+document.addEventListener("mouseover", e => {
+  const el = e.target.closest("[data-abrir],[data-focar],[data-pop],[data-esc]");
+  const k = el ? (el.dataset.esc ? "escola|" + el.dataset.esc : (el.dataset.abrir || el.dataset.focar || el.dataset.pop || "")) : null;
+  if (k === hoverAtual) return; if (hoverAtual) destacar(hoverAtual, false); hoverAtual = k || null; if (hoverAtual) destacar(hoverAtual, true);
+});
+function piscar(lys) { let n = 0; const t = setInterval(() => { lys.forEach(l => l._map && l.setStyle({color: n % 2 ? "#ffffff" : "#55b8e6", weight: n % 2 ? 4 : 2})); if (++n > 7) clearInterval(t); }, 220); }
+function voarPara(mapa, lys) {
+  if (!mapa || !lys?.length) return;
+  if (lys.length === 1 && lys[0].getLatLng) mapa.flyTo(lys[0].getLatLng(), Math.max(mapa.getZoom(), 15), {duration: 1}); else mapa.flyToBounds(L.featureGroup(lys).getBounds().pad(.3), {duration: 1, maxZoom: 13});
+  setTimeout(() => { lys.forEach(l => l.bringToFront?.()); lys[0].openTooltip?.(); piscar(lys); }, 1050);
+}
+async function verNoMapa(nivel, chave) {
+  fecharPop();
+  if (nivel === "escola") { const [m, i] = chave.split(":"); E.detCam = "escola"; E.pendEscola = null; if (!E.sel || E.sel.nivel !== "mun" || E.sel.chave !== m) abrir("mun", m); else irAba("lugar", false); await E.escolasProntas; await desenharDetMapa(); rolarPara($("#detMapa"), false); voarPara(E.detMapa, E.reg.det?.get("escola|" + chave)); return; }
+  if (nivel === "bairro" || nivel === "regional") { E.detCam = nivel; irAba("lugar", false); await E.escolasProntas; await desenharDetMapa(); rolarPara($("#detMapa"), false); voarPara(E.detMapa, E.reg.det?.get(`${nivel}|${chave}`)); return; }
+  if (nivel === "mg") { irAba("mapa"); return; }
+  if (nivel !== "mun") { focar(nivel, chave); return; }
+  if (E.aba !== "mapa") irAba("mapa", false); else desenharMapa();
+  rolarPara($("#migalhas"), false);
+  setTimeout(() => voarPara(E.mapa, E.reg.mapa?.get("mun|" + chave)), 120);
+}
+document.addEventListener("click", e => { const v = e.target.closest("[data-ver]"); if (v) { e.preventDefault(); e.stopPropagation(); const [n, ...c] = v.dataset.ver.split("|"); verNoMapa(n, c.join("|")); } }, true);
+
+/* ---------------- escolas e seções (um arquivo por cidade) */
+E.esc = {}; E.detCam = "cidade";
+async function escolasDe(m) {
+  if (E.esc[m]) return E.esc[m];
+  const d = await fetch(`dados/escolas/${m}.json`).then(r => r.ok ? r.json() : null); if (!d) return E.esc[m] = {linhas: [], d: null};
+  const ix = Object.fromEntries(d.campos.map((c, i) => [c, i]));
+  return E.esc[m] = {d, ix, linhas: d.escolas};
+}
+function unidadeEscola(m, row, ix) {
+  const C26 = E.B.cand26.map(c => c[0]), t = E.turno, C22 = E.B.cand22[t].map(c => c[0]);
+  const v26 = {}, v22 = {}; row[ix.v26].forEach((q, j) => { if (q) v26[C26[j]] = q; }); row[ix["v22_" + t]].forEach((q, j) => { if (q) v22[C22[j]] = q; });
+  const a = row[ix.a26], b = row[ix["a22_" + t]];
+  const o = derivarP({v26, v22, d26: [a[0], a[1], a[0] - a[1], a[2], a[3]], d22: [b[0], b[1], b[0] - b[1], b[2], b[3]]});
+  const top = k => { const x = row[ix[k]]?.[0]; return x ? [E.B.deputados[x[0]], x[1]] : null; };
+  return Object.assign(o, {nivel: "escola", chave: `${m}:${E.esc[m].linhas.indexOf(row)}`, nome: row[ix.nome], mun: m, zona: row[ix.zona], bairro: row[ix.bairro] || "(sem bairro)", regional: row[ix.regional] || "",
+    lat: row[ix.lat], lng: row[ix.lng], f26: top("fed26"), e26: top("est26"), f22: top("fed22"), e22: top("est22"), row});
+}
+function somaEscolas(lista, nome, nivel) {
+  const o = {v26: {}, v22: {}, d26: [0, 0, 0, 0, 0], d22: [0, 0, 0, 0, 0]};
+  for (const u of lista) { for (const n in u.v26) o.v26[n] = (o.v26[n] || 0) + u.v26[n]; for (const n in u.v22) o.v22[n] = (o.v22[n] || 0) + u.v22[n]; for (let i = 0; i < 5; i++) { o.d26[i] += u.d26[i]; o.d22[i] += u.d22[i]; } }
+  return Object.assign(derivarP(o), {nome, nivel, chave: nome, escolas: lista});
+}
+// escolas do lugar aberto (cidade ou zona), já como unidades com resultado
+async function escolasDoLugar() {
+  const {nivel, chave} = E.sel, u = unidade(nivel, chave);
+  const muns = nivel === "mun" ? [chave] : cidadesDe(u), out = [];
+  for (const m of muns) { const x = await escolasDe(m); x.linhas.forEach((row, i) => { if (nivel === "zona" && String(row[x.ix.zona]) !== String(chave)) return; const e = unidadeEscola(m, row, x.ix); e.chave = `${m}:${i}`; out.push(e); }); }
+  return out;
+}
+const colsEsc = () => { const y = ANO(); return CMP()
+  ? [["venc26", "Vencedor 2026", u => `<span class="venc"><i style="background:${corCand(u.venc26)}"></i>${esc(curto(u.venc26))}</span>${u.virou ? '<span class="virou">virou</span>' : ""}`], ["bol26", "Flávio 26", u => pct(u.bol26)], ["bol22", "Jair 22", u => pct(u.bol22)], ["dBol", "Δ Bolsonaro", u => `<span class="${u.dBol > 0 ? "pos" : "neg"}">${pp(u.dBol)}</span>`], ["lula26", "Lula 26", u => pct(u.lula26)], ["lula22", "Lula 22", u => pct(u.lula22)], ["dLula", "Δ Lula", u => `<span class="${u.dLula > 0 ? "pos" : "neg"}">${pp(u.dLula)}</span>`]]
+  : [["venc" + y, "Vencedor", u => `<span class="venc"><i style="background:${corCand(u["venc" + y])}"></i>${esc(curto(u["venc" + y]))}</span>`], ["bol" + y, nomeBol(y), u => `<b>${pct(u["bol" + y])}</b>`], ["lula" + y, "Lula", u => `<b>${pct(u["lula" + y])}</b>`], ["t" + y, "Votos válidos", u => int(u["t" + y])], ["abst" + y, "Abstenção", u => pct(u["abst" + y])], ["bn" + y, "Brancos+nulos", u => pct(u["bn" + y])], ["f" + y + "n", "Federal + votado", u => celTop(u["f" + y])], ["e" + y + "n", "Estadual + votado", u => celTop(u["e" + y])]]; };
+E.ordEsc = {};
+function tabelaEscolas(id, titulo, lista, comBairro) {
+  const o = E.ordEsc[id] || {k: "aptos", dir: -1}, cols = colsEsc();
+  lista.forEach(u => { u.f26n = u.f26?.[0].nome || ""; u.e26n = u.e26?.[0].nome || ""; u.f22n = u.f22?.[0].nome || ""; u.e22n = u.e22?.[0].nome || ""; });
+  const ord = lista.slice().sort((a, b) => o.k === "nome" ? a.nome.localeCompare(b.nome) * o.dir : (typeof a[o.k] === "string" ? String(a[o.k]).localeCompare(b[o.k]) : ((a[o.k] ?? -1e9) - (b[o.k] ?? -1e9))) * o.dir);
+  const linha = u => u.nivel === "escola" ? `data-esc="${u.chave}"` : `data-verdet="${u.nivel}|${esc(u.chave)}" data-pop="${u.nivel}|${esc(u.chave)}"`;
+  return `<h4 class="sub">${esc(titulo)} <small>${int(lista.length)} · toque para ver detalhes</small></h4><div class="tab-wrap" style="max-height:460px" data-tabesc="${id}"><table><thead><tr><th data-oe="${id}|nome">${u0(lista)}</th>${comBairro ? "<th>Bairro</th>" : ""}<th data-oe="${id}|aptos">Eleitores${o.k === "aptos" ? (o.dir < 0 ? " ↓" : " ↑") : ""}</th>${cols.map(([k, t]) => `<th data-oe="${id}|${k}">${t}${o.k === k ? (o.dir < 0 ? " ↓" : " ↑") : ""}</th>`).join("")}</tr></thead>
+    <tbody>${ord.map(u => `<tr ${linha(u)}><td><b>${esc(u.nome)}</b></td>${comBairro ? `<td style="text-align:left">${esc(u.bairro)}</td>` : ""}<td>${int(u.aptos)}</td>${cols.map(([, , f]) => `<td>${f(u)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+}
+const u0 = l => l[0]?.nivel === "escola" ? "Escola" : l[0]?.nivel === "bairro" ? "Bairro" : "Regional";
+async function blocoEscolas() {
+  const alvo = $("#detEscolas"); if (!alvo || !E.sel || !["mun", "zona"].includes(E.sel.nivel)) return;
+  alvo.innerHTML = `<div class="carregando">Carregando as escolas e seções…</div>`;
+  const lista = await escolasDoLugar(); E.escAtual = lista;
+  const osm = E.sel.nivel === "mun" && E.cidOSM?.includes(E.sel.chave);
+  const bairros = [...lista.reduce((m, u) => m.set(u.bairro, [...(m.get(u.bairro) || []), u]), new Map())].map(([n, l]) => somaEscolas(l, n, "bairro"));
+  const regs = osm ? [...lista.filter(u => u.regional).reduce((m, u) => m.set(u.regional, [...(m.get(u.regional) || []), u]), new Map())].map(([n, l]) => somaEscolas(l, n, "regional")) : [];
+  E.bairrosAtual = bairros; E.regsAtual = regs;
+  const nSec = (await Promise.all((E.sel.nivel === "mun" ? [E.sel.chave] : cidadesDe(unidade(E.sel.nivel, E.sel.chave))).map(escolasDe))).reduce((t, x) => t + (x.d?.secoes26 || []).filter(s => E.sel.nivel !== "zona" || String(s[1]) === String(E.sel.chave)).length, 0);
+  const y = ANO(), nL = lista.filter(u => familia(u["venc" + y]) === "lula").length;
+  alvo.innerHTML = `<div class="sec-cab" style="margin-top:26px"><h2>Escolas e seções</h2><p>Os locais de votação de ${esc(unidade(E.sel.nivel, E.sel.chave).nome)}, com o resultado de cada um e de cada seção. No mapa acima, escolha <b>Escolas</b>${osm ? ", <b>Bairros</b> ou <b>Regionais</b>" : ""} para vê-los.</p></div>
+    <div class="kpis esc-kpis"><div class="card"><b>${int(lista.length)}</b><span>locais de votação</span></div><div class="card"><b>${int(nSec)}</b><span>seções</span></div>${CMP() ? `<div class="card"><b>${int(lista.filter(u => u.virou).length)}</b><span>escolas mudaram de lado</span></div>` : `<div class="card"><b>${int(lista.length - nL)}</b><span>escolas com ${nomeBol(y)} na frente</span></div><div class="card"><b>${int(nL)}</b><span>escolas com Lula na frente</span></div>`}${osm ? `<div class="card"><b>${int(regs.length)} · ${int(bairros.length)}</b><span>regionais · bairros</span></div>` : ""}</div>
+    ${regs.length ? tabelaEscolas("regs", "Regionais", regs) : ""}${tabelaEscolas("bairros", "Bairros", bairros)}${tabelaEscolas("escolas", "Escolas", lista, true)}`;
+  animar(alvo);
+}
+document.addEventListener("click", e => {
+  const th = e.target.closest("[data-oe]"); if (th) { const [id, k] = th.dataset.oe.split("|"); const o = E.ordEsc[id] || {k: "aptos", dir: -1}; E.ordEsc[id] = o.k === k ? {k, dir: -o.dir} : {k, dir: -1}; blocoEscolas(); return; }
+  const tr = e.target.closest("[data-esc]"); if (tr) { const u = E.escAtual?.find(x => x.chave === tr.dataset.esc); if (u) popoverEscola(u, e); return; }
+  const vd = e.target.closest("[data-verdet]"); if (vd && !e.target.closest("#pop")) { e.stopPropagation(); const [n, ...c] = vd.dataset.verdet.split("|"); const lista = n === "bairro" ? E.bairrosAtual : E.regsAtual, u = lista?.find(x => x.chave === c.join("|")); if (u) popoverGrupo(u, e); }
+}, true);
+function blocoAno(u) { return CMP() ? linhaAno(u, "26", true) + linhaAno(u, "22") : linhaAno(u, ANO(), true); }
+function abrePop(html, ev) {
+  const pop = $("#pop"); pop.innerHTML = html; pop.hidden = false;
+  const oe = ev?.originalEvent || ev, x = oe?.clientX ?? innerWidth / 2, y = oe?.clientY ?? innerHeight / 3, w = pop.offsetWidth, h = pop.offsetHeight;
+  pop.style.left = Math.max(8, Math.min(innerWidth - w - 8, x + 14)) + "px"; pop.style.top = Math.max(8, Math.min(innerHeight - h - 8, y - 20)) + "px"; E.popT = Date.now(); animar(pop);
+}
+function popoverGrupo(u, ev) {
+  const top = u.escolas.slice().sort((a, b) => b.aptos - a.aptos).slice(0, 8);
+  abrePop(`<button class="fechar" aria-label="Fechar">×</button><span class="selo mini">${u.nivel === "bairro" ? "Bairro" : "Regional"}</span><h3>${esc(u.nome)}</h3><p class="nota">${int(u.escolas.length)} locais de votação · ${int(u.aptos)} eleitores</p>
+    <div class="pop-pres">${blocoAno(u)}</div><button class="btn prim ver" data-ver="${u.nivel}|${esc(u.chave)}">Ver no mapa</button>
+    <h4 class="sub" style="margin-top:10px">Maiores escolas</h4><ol class="rank">${top.map(e => `<li><button data-esc="${e.chave}"><span>${esc(e.nome)}</span><b>${pct(e["bol" + ANO()])} · ${pct(e["lula" + ANO()])}</b></button></li>`).join("")}</ol>`, ev);
+}
+async function popoverEscola(u, ev) {
+  const x = await escolasDe(u.mun), i = +u.chave.split(":")[1], y = ANO(), C26 = E.B.cand26.map(c => c[0]), t = E.turno, C22 = E.B.cand22[t].map(c => c[0]);
+  const deps = (k, ano) => (u.row[x.ix[k]] || []).map(([di, q]) => { const d = E.B.deputados[di]; return d ? `<li><button data-dep="${di}" title="Adicionar ao comparativo">${avatar(d.foto, d.nome, "#2a333d", "av-m")}<span>${esc(d.nome)} <small>${esc(d.partido)}</small></span><b>${int(q)}</b><i class="mais">+</i></button></li>` : ""; }).join("") || "<li class='nota'>–</li>";
+  const anos = CMP() ? ["26", "22"] : [y];
+  const secoes = a => {
+    if (a === "26") { const l = (x.d.secoes26 || []).filter(s => s[0] === i), iF = C26.indexOf(FB), iL = C26.indexOf(LULA);
+      return `<h4 class="sub">Seções · 2026 <small>${l.length}</small></h4><div class="tab-wrap" style="max-height:240px"><table><thead><tr><th>Seção</th><th>Eleitores</th><th>Votaram</th><th>Flávio</th><th>Lula</th><th>Outros</th><th>Brancos</th><th>Nulos</th></tr></thead><tbody>${l.map(s => { const v = s[7], tot = v.reduce((a, b) => a + b, 0); return `<tr><td><b>${s[2]}</b> <small class="nota">zona ${s[1]}</small></td><td>${int(s[3])}</td><td>${int(s[4])}</td><td>${int(v[iF])} <small class="nota">${pct(v[iF] / tot, 0)}</small></td><td>${int(v[iL])} <small class="nota">${pct(v[iL] / tot, 0)}</small></td><td>${int(tot - v[iF] - v[iL])}</td><td>${int(s[5])}</td><td>${int(s[6])}</td></tr>`; }).join("")}</tbody></table></div>`; }
+    const l = (x.d.secoes22 || []).filter(s => s[0] === i), C = E.B.cand22[t].map(c => c[0]), iJ = C.indexOf(JB), iL = C.indexOf(LULA), off = t === "2" ? 8 : 4;
+    return `<h4 class="sub">Seções · 2022 ${t === "2" ? "2º" : "1º"} turno <small>${l.length} · seções de 2022 ligadas a esta escola</small></h4><div class="tab-wrap" style="max-height:240px"><table><thead><tr><th>Seção</th><th>Eleitores</th><th>Votaram</th><th>Jair</th><th>Lula</th><th>Outros</th><th>Brancos</th><th>Nulos</th></tr></thead><tbody>${l.map(s => { const v = t === "2" ? s[11] : s[7], comp = t === "2" ? s[8] : s[4], br = t === "2" ? s[9] : s[5], nu = t === "2" ? s[10] : s[6], tot = v.reduce((a, b) => a + b, 0); return `<tr><td><b>${s[2]}</b> <small class="nota">zona ${s[1]}</small></td><td>${int(s[3])}</td><td>${int(comp)}</td><td>${int(v[iJ])} <small class="nota">${pct(v[iJ] / tot, 0)}</small></td><td>${int(v[iL])} <small class="nota">${pct(v[iL] / tot, 0)}</small></td><td>${int(tot - v[iJ] - v[iL])}</td><td>${int(br)}</td><td>${int(nu)}</td></tr>`; }).join("")}</tbody></table></div>`;
+  };
+  abrePop(`<button class="fechar" aria-label="Fechar">×</button><span class="selo mini">Escola</span><h3>${esc(u.nome)}</h3><p class="nota">${esc(u.bairro)}${u.regional ? " · regional " + esc(u.regional) : ""} · ${esc(E.B.municipios[u.mun]?.nome)} · zona ${u.zona} · ${int(u.aptos)} eleitores</p>
+    <div class="pop-pres">${blocoAno(u)}</div>
+    <div class="rg-chips">${anos.map(a => `<span>${a === "26" ? "2026" : "2022"}: comparecimento ${pct(u["d" + a][1] / u["d" + a][0], 0)} · abstenção ${pct(u["abst" + a], 0)} · brancos e nulos ${pct(u["bn" + a], 1)}</span>`).join("")}</div>
+    <button class="btn prim ver" data-ver="escola|${u.chave}">Ver no mapa</button>
+    <div class="pop-tops">${anos.map(a => `<div><h4>Federal 20${a}</h4><ol class="top">${deps("fed" + a)}</ol></div><div><h4>Estadual 20${a}</h4><ol class="top">${deps("est" + a)}</ol></div>`).join("")}</div>
+    ${anos.map(secoes).join("")}`, ev);
+}
+
 /* ---------------- modos e abas */
 const GRUPOS = {pres: [["geral", "Visão geral"], ["mapa", "Mapa"], ["regioes", "Mapas das regiões"], ["tabela", "Tabela"]],
   deps: [["deps", "Perfil e comparação"], ["depreg", "Por região"]], mesc: [["mesc", "Cruzamento"]], lugar: [["lugar", "Lugar"]]};
@@ -133,6 +285,7 @@ function irAba(aba, rolar = true) {
   if (aba === "deps") renderDeps();
   if (aba === "depreg") depRegioes();
   if (aba === "mesc") renderMesc();
+  animar($("#p-" + aba));
   if (rolar) rolarPara(g === "deps" || g === "mesc" ? $("#seletorDeps") : $("#p-" + aba));
 }
 // rola até o elemento, deixando-o logo abaixo da barra fixa (modos e abas)
@@ -149,7 +302,7 @@ document.addEventListener("click", e => { const a = e.target.closest("[data-ir]"
 const renderDepsAtual = () => { if (E.aba === "deps") renderDeps(); if (E.aba === "depreg") depRegioes(); if (E.aba === "mesc") renderMesc(); };
 
 /* ---------------- destaques (Minas) */
-function destaques() { if (CMP()) destaquesCmp(); else destaquesAno(ANO()); }
+function destaques() { if (CMP()) destaquesCmp(); else destaquesAno(ANO()); animar($("#destaques")); }
 const abreU = u => `data-abrir="${u.nivel}|${esc(u.chave)}"`;
 function destaquesAno(y) {
   const mg = somar(todasMz()), cid = agrupar("mun"), me = agrupar("me"), v = mg["v" + y], t = mg["t" + y], d = mg["d" + y];
@@ -462,6 +615,7 @@ function desenharMapa() {
   const pane = E.mapa.getPanes().overlayPane;
   pane.classList.add("trocando");
   if (E.camada) E.camada.remove();
+  E.reg.mapa = new Map();
   E.modo = validaModo(E.modo); botoesModo("#modoMapa", E.modo);
   const foco = E.foco && unidade(E.foco.nivel, E.foco.chave);
   if (E.foco && !foco) E.foco = null;
@@ -489,8 +643,10 @@ function desenharMapa() {
     },
     onEachFeature: (f, l) => {
       const m = E.munDe.get(f.properties.ibge), c = dentro.get(m);
+      registrar("mapa", "mun|" + m, l);
       if (c) { l.addTo(grupoFoco); l.bindTooltip(dica(c), {sticky: true}); l.on("click", ev => popover("mun", m, ev)); return; }
       const u = unidadeDe.get(m); if (!u) return;
+      if (u.nivel !== "mun") registrar("mapa", `${u.nivel}|${u.chave}`, l);
       const vaiFocar = u.nivel !== "mun";
       l.bindTooltip(foco ? `<b>${esc(u.nome)}</b><br><small>${vaiFocar ? "toque para ir até lá" : "toque para ver detalhes"}</small>` : dica(u) + (vaiFocar ? "<br><small style='color:#55b8e6'>toque para dar zoom</small>" : ""), {sticky: true});
       l.on("click", ev => vaiFocar ? focar(u.nivel, u.chave) : popover("mun", u.chave, ev));
@@ -503,7 +659,8 @@ function desenharMapa() {
     for (const u of E.unidades) {
       const z = E.B.zonas[u.chave]; if (!z?.lat) continue;
       L.circleMarker([z.lat, z.lng], {radius: 4 + 14 * Math.sqrt(u.aptos / mx), color: "#0b1015", weight: 1, fillOpacity: .9, fillColor: corValor(u, E.modo, qz)})
-        .bindTooltip(dica(u) + "<br><small style='color:#55b8e6'>toque para dar zoom</small>", {sticky: true}).on("click", () => focar("zona", u.chave)).addTo(grupo);
+        .bindTooltip(dica(u) + "<br><small style='color:#55b8e6'>toque para dar zoom</small>", {sticky: true}).on("click", () => focar("zona", u.chave)).addTo(grupo).eachLayer?.(() => 0);
+      registrar("mapa", "zona|" + u.chave, grupo.getLayers()[grupo.getLayers().length - 1]);
     }
   }
   E.camada = grupo.addTo(E.mapa);
@@ -571,7 +728,7 @@ function popover(nivel, chave, ev) {
     <div class="rg-chips">${CMP() ? `<span class="${u.dLula > 0 ? "pos" : "neg"}">Lula ${pp(u.dLula)}</span><span class="${u.dBol > 0 ? "pos" : "neg"}">Bolsonaro ${pp(u.dBol)}</span>` : ""}<span>Abstenção ${pct(u["abst" + ANO()])}</span><span>Brancos e nulos ${pct(u["bn" + ANO()])}</span></div>
     ${E.deps.length ? `<div class="rg-deps">${E.deps.map((s, j) => `<span><i style="background:${s.cor}"></i>${esc(s.d.nome)} ${s.d.ano}: <b>${int(u["dv" + j])}</b> votos (${pct(u["dp" + j], 2)}) · ${u["rk" + j] === 1 ? "<b>1º, o mais votado</b>" : u["rk" + j] < 99 ? `<b>${u["rk" + j]}º</b>` : "abaixo do 20º"}</span>`).join("")}</div>` : ""}
     <div class="pop-tops">${(CMP() ? ["26", "22"] : [ANO()]).map(a => `<div><h4>Federal 20${a}</h4><ol class="top">${lista("6-" + a)}</ol></div><div><h4>Estadual 20${a}</h4><ol class="top">${lista("7-" + a)}</ol></div>`).join("")}</div>
-    <button class="btn prim" data-abrir="${nivel}|${esc(chave)}">Ver tudo sobre ${esc(u.nome)} →</button>`;
+    <div class="pop-bts"><button class="btn" data-ver="${nivel}|${esc(chave)}">Ver no mapa</button><button class="btn prim" data-abrir="${nivel}|${esc(chave)}">Ver tudo sobre ${esc(u.nome)} →</button></div>`;
   pop.hidden = false;
   const w = pop.offsetWidth, h = pop.offsetHeight;
   pop.style.left = Math.max(8, Math.min(innerWidth - w - 8, x + 14)) + "px";
@@ -631,37 +788,59 @@ function abrir(nivel, chave) {
   else { const s = new Set(u.mzs); extra = tabelaSub(nivel === "mg" ? "Todas as cidades" : "Cidades", "Cidade", agrupar("mun").filter(c => c.mzs.some(k => s.has(k))), "mun"); }
   if (nivel === "me") { const s = new Set(muns); extra = tabelaSub("Microrregiões", "Microrregião", agrupar("mi").filter(c => s.has(c.mzs[0].split("-")[0])), "mi") + extra; }
   const dep = E.deps.length ? `<h4 class="sub">Deputados escolhidos neste lugar</h4><div class="kpis">${E.deps.map((s, j) => `<div class="card dep-kpi" style="--cor:${s.cor}">${avatar(s.d.foto, s.d.nome, s.cor, "av-p")}<div><b>${int(u["dv" + j])}</b><span>votos de ${esc(s.d.nome)} (${s.d.ano}) · ${pct(u["dp" + j], 2)} dos válidos · ${pct(u["dv" + j] / s.total, 1)} de tudo que teve em MG</span></div></div>`).join("")}</div>` : "";
-  $("#detCorpo").innerHTML = ""; $("#detCorpo").append(box); $("#detCorpo").insertAdjacentHTML("beforeend", dep + '<div id="detTop"></div>' + extra);
+  $("#detCorpo").innerHTML = ""; $("#detCorpo").append(box); $("#detCorpo").insertAdjacentHTML("beforeend", dep + '<div id="detTop"></div>' + extra + '<div id="detEscolas"></div>');
+  E.escAtual = null; E.bairrosAtual = null; E.regsAtual = null;
+  if (!["mun", "zona"].includes(nivel)) E.detCam = "cidade";
+  E.escolasProntas = blocoEscolas().then(() => { if (E.pendEscola != null) { const u = E.escAtual?.find(x => x.chave === E.pendEscola); E.pendEscola = null; if (u) { verNoMapa("escola", u.chave).then(() => popoverEscola(u, null)); } } });
   topDeps(nivel === "mg" ? "mg" : `${nivel}:${chave}`, $("#detTop"), `Deputados mais votados em ${u.nome}`);
   if (E.detMapa) E.detMapa._limites = null;
   irAba("lugar");
+  animar($("#p-lugar"));
 }
-function desenharDetMapa() {
+async function desenharDetMapa() {
   if (!E.sel) return;
   const {nivel, chave} = E.sel, u = unidade(nivel, chave); if (!u) return;
   if (!E.detMapa) E.detMapa = novoMapa("detMapa");
-  if (E.detCamada) E.detCamada.remove();
   E.detModo = validaModo(E.detModo); botoesModo("#detModo", E.detModo);
-  const B = E.B, muns = new Set(cidadesDe(u));
-  // cada cidade do lugar com o próprio resultado; numa zona, a parte da cidade que fica na zona
+  const B = E.B, muns = new Set(cidadesDe(u)), temEsc = ["mun", "zona"].includes(nivel), osm = nivel === "mun" && E.cidOSM?.includes(chave);
+  if (!temEsc || (!osm && ["bairro", "regional"].includes(E.detCam))) E.detCam = temEsc ? (E.detCam === "cidade" ? "cidade" : "escola") : "cidade";
+  $("#detCamada").innerHTML = temEsc ? `<span class="rot">Mostrar</span><div class="seg">${[["cidade", nivel === "mun" ? "Cidade e zonas" : "Cidades"], ["escola", "Escolas"], ...(osm ? [["bairro", "Bairros"], ["regional", "Regionais"]] : [])].map(([k, n]) => `<button data-cam="${k}" aria-pressed="${E.detCam === k}">${n}</button>`).join("")}</div>` : "";
   const porM = new Map();
   if (nivel === "zona") for (const k of u.mzs) porM.set(k.split("-")[0], Object.assign(somar([k]), {nome: `${B.municipios[k.split("-")[0]]?.nome} (Zona ${chave})`}, maisVotados("mun", k.split("-")[0])));
   else for (const c of agrupar("mun")) if (muns.has(c.chave)) porM.set(c.chave, c);
   const porIbge = new Map([...porM].map(([m, c]) => [ibgeDe(m), c]));
-  const lista = [...porM.values()], q = quebras(agrupar("mun").map(c => c[E.detModo]));
-  const grupo = L.featureGroup(), foco = L.featureGroup();
-  L.geoJSON(E.geo, {style: f => { const c = porIbge.get(f.properties.ibge); return c ? {color: "#0b1015", weight: .8, fillOpacity: .92, fillColor: corValor(c, E.detModo, q)} : {color: "rgba(255,255,255,.08)", weight: .3, fillOpacity: .05, fillColor: "#9aa6b2"}; },
-    onEachFeature: (f, l) => { const c = porIbge.get(f.properties.ibge); if (!c) return; l.addTo(foco); l.bindTooltip(dica(c), {sticky: true}); l.on("click", ev => popover("mun", [...porM].find(([m]) => ibgeDe(m) === f.properties.ibge)[0], ev)); }}).addTo(grupo);
-  // cidade com várias zonas: um círculo por zona
-  if (nivel === "mun" && u.mzs.length > 1) {
+  const q = quebras(agrupar("mun").map(c => c[E.detModo]));
+  const grupo = L.featureGroup(), foco = L.featureGroup(), cam = E.detCam;
+  E.reg.det = new Map();
+  const fundo = cam !== "cidade";
+  L.geoJSON(E.geo, {style: f => { const c = porIbge.get(f.properties.ibge); return c ? {color: fundo ? "rgba(255,255,255,.35)" : "#0b1015", weight: fundo ? 1.2 : .8, fillOpacity: fundo ? .08 : .92, fillColor: corValor(c, E.detModo, q)} : {color: "rgba(255,255,255,.08)", weight: .3, fillOpacity: .05, fillColor: "#9aa6b2"}; },
+    onEachFeature: (f, l) => { const c = porIbge.get(f.properties.ibge); if (!c) return; l.addTo(foco); const m = [...porM].find(([mm]) => ibgeDe(mm) === f.properties.ibge)[0]; registrar("det", "mun|" + m, l); if (fundo) return; l.bindTooltip(dica(c), {sticky: true}); l.on("click", ev => popover("mun", m, ev)); }}).addTo(grupo);
+  if (cam === "cidade" && nivel === "mun" && u.mzs.length > 1) {
     const zs = u.mzs.map(k => Object.assign(somar([k]), {nome: `Zona ${k.split("-")[1]}`, z: k.split("-")[1]})), mx = Math.max(...zs.map(z => z.aptos)), qz = quebras(zs.map(z => z[E.detModo]));
-    for (const z of zs) { const p = B.zonas[z.z]; if (!p?.lat) continue; L.circleMarker([p.lat, p.lng], {radius: 7 + 16 * Math.sqrt(z.aptos / mx), color: "#0b1015", weight: 1.2, fillOpacity: .95, fillColor: corValor(z, E.detModo, CATEG(E.detModo) ? q : qz)}).bindTooltip(dica(z), {sticky: true}).on("click", ev => popover("zona", z.z, ev)).addTo(grupo); }
+    for (const z of zs) { const p = B.zonas[z.z]; if (!p?.lat) continue; const mk = L.circleMarker([p.lat, p.lng], {radius: 7 + 16 * Math.sqrt(z.aptos / mx), color: "#0b1015", weight: 1.2, fillOpacity: .95, fillColor: corValor(z, E.detModo, CATEG(E.detModo) ? q : qz)}).bindTooltip(dica(z), {sticky: true}).on("click", ev => popover("zona", z.z, ev)).addTo(grupo); registrar("det", "zona|" + z.z, mk); }
   }
+  let leg = legenda(E.detModo, q);
+  if (cam === "escola") {
+    const lista = E.escAtual || await escolasDoLugar(), qe = quebras(lista.map(e => e[E.detModo])), mx = Math.max(...lista.map(e => e.aptos));
+    for (const e of lista) { if (e.lat == null) continue; const mk = L.circleMarker([e.lat, e.lng], {radius: 3 + 9 * Math.sqrt(e.aptos / mx), color: "#0b1015", weight: .8, fillOpacity: .93, fillColor: corValor(e, E.detModo, CATEG(E.detModo) ? q : qe)}).bindTooltip(dica(e) + `<br><small>${esc(e.bairro)}</small>`, {sticky: true}).on("click", ev => popoverEscola(e, ev)).addTo(grupo); registrar("det", "escola|" + e.chave, mk); }
+    leg = legenda(E.detModo, CATEG(E.detModo) ? q : qe) + `<span class="nota">Círculos: ${int(lista.length)} locais de votação (tamanho = eleitores).</span>`;
+  }
+  if (cam === "bairro" || cam === "regional") {
+    const ib = ibgeDe(chave); if (!E.osm) E.osm = {}; if (!E.osm[ib]) E.osm[ib] = await fetch(`dados/osm/${ib}.json`).then(r => r.json());
+    if (!E.bairrosAtual) await blocoEscolas();
+    const lista = cam === "bairro" ? E.bairrosAtual : E.regsAtual, porNome = new Map(lista.map(x => [x.nome, x])), qb = quebras(lista.map(x => x[E.detModo]));
+    L.geoJSON(cam === "bairro" ? E.osm[ib].bairros : E.osm[ib].regionais, {style: f => { const x = porNome.get(f.properties.nome); return {color: "#0b1015", weight: cam === "regional" ? 1.4 : .6, fillOpacity: x ? .92 : .2, fillColor: corValor(x, E.detModo, CATEG(E.detModo) ? q : qb)}; },
+      onEachFeature: (f, l) => { const x = porNome.get(f.properties.nome); l.bindTooltip(x ? dica(x) : `<b>${esc(f.properties.nome)}</b><br><small>sem local de votação</small>`, {sticky: true}); if (x) { l.on("click", ev => popoverGrupo(x, ev)); registrar("det", `${cam}|${x.chave}`, l); } }}).addTo(grupo);
+    if (cam === "bairro") L.geoJSON(E.osm[ib].regionais, {style: {color: "rgba(233,238,242,.6)", weight: 1.3, fill: false}, interactive: false}).addTo(grupo);
+    leg = legenda(E.detModo, CATEG(E.detModo) ? q : qb);
+  }
+  if (E.detCamada) E.detCamada.remove();
   E.detCamada = grupo.addTo(E.detMapa);
   const lim = foco.getBounds();
   if (lim.isValid() && !E.detMapa._limites) { E.detMapa._limites = lim.pad(.08); if ($("#detMapa").clientWidth) E.detMapa.fitBounds(E.detMapa._limites); }
-  $("#detLegenda").innerHTML = legenda(E.detModo, q) + (nivel === "mun" && u.mzs.length > 1 ? `<span class="nota">Círculos: as ${u.mzs.length} zonas eleitorais da cidade.</span>` : "");
+  $("#detLegenda").innerHTML = leg + (cam === "cidade" && nivel === "mun" && u.mzs.length > 1 ? `<span class="nota">Círculos: as ${u.mzs.length} zonas eleitorais da cidade.</span>` : "");
 }
+document.addEventListener("click", e => { const b = e.target.closest("#detCamada [data-cam]"); if (b) { E.detCam = b.dataset.cam; desenharDetMapa(); } });
 $("#detModo").addEventListener("click", e => { const b = e.target.closest("[data-m]"); if (b) { E.detModo = b.dataset.m; desenharDetMapa(); } });
 
 /* ---------------- deputados: entre si e com o Presidente */
@@ -855,6 +1034,8 @@ function preencherBuscas() {
   const add = (rot, campo) => { for (const r of new Set(Object.values(B.municipios).map(x => x[campo]))) if (r) opts.push(`${rot} · ${r}`); };
   add("Macrorregião", "me"); add("Microrregião", "mi"); add("Região intermediária", "ri"); add("Região imediata", "rm");
   $("#lUnidades").innerHTML = opts.sort((a, b) => a.localeCompare(b)).map(o => `<option value="${esc(o)}">`).join("");
+  // escolas entram na busca depois (índice separado)
+  fetch("dados/escolas-idx.json").then(r => r.json()).then(ix => { E.escIdx = ix.escolas; E.cidOSM = ix.cidadesOSM; $("#lUnidades").insertAdjacentHTML("beforeend", ix.escolas.map(([n, m, i, b]) => `<option value="${esc(`Escola · ${n} · ${b} · ${B.municipios[m]?.nome}`)}">`).join("")); });
   preencherDeps();
 }
 // busca de deputados com foto (lista própria, navegável pelo teclado)
@@ -887,6 +1068,7 @@ $("#qDep").addEventListener("blur", () => setTimeout(acFechar, 120));
 $("#qUnidade").addEventListener("change", e => {
   const v = e.target.value, B = E.B, parte = v.split(" · ").slice(1).join(" · ");
   let nivel, chave;
+  if (v.startsWith("Escola · ")) { const ach = E.escIdx?.find(([n, m, i, b]) => v === `Escola · ${n} · ${b} · ${B.municipios[m]?.nome}`); if (ach) { e.target.value = ""; e.target.blur(); E.pendEscola = `${ach[1]}:${ach[2]}`; E.detCam = "escola"; abrir("mun", ach[1]); } return; }
   if (v.startsWith("Cidade · ")) { nivel = "mun"; chave = Object.keys(B.municipios).find(m => B.municipios[m].nome === parte); }
   else if (v.startsWith("Zona ")) { nivel = "zona"; chave = Object.keys(B.zonas).find(z => B.zonas[z].nome === v); }
   else { nivel = {"Macrorregião": "me", "Microrregião": "mi", "Região intermediária": "ri", "Região imediata": "rm"}[v.split(" · ")[0]]; chave = parte; }

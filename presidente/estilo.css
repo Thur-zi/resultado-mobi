@@ -422,3 +422,18 @@ h1{text-align:center}
 .passos{display:flex!important;flex-wrap:wrap}.passos li{flex:1 1 260px}
 .sec-cab p,.leitura,.metodo p,.insight{text-align:justify}
 .galeria,.dep-cards,.dep-mapas,.mesc-cards{justify-content:center}
+
+/* ---- animações e interação com o mapa */
+.anim{opacity:0;transform:translateY(16px);transition:opacity .55s ease var(--atraso,0ms),transform .55s cubic-bezier(.2,.7,.2,1) var(--atraso,0ms)}
+.anim.visto{opacity:1;transform:none}
+.dest.anim.visto:hover,.card.regiao.anim.visto:hover{transform:translateY(-3px)}
+h1 .azul{display:inline-block;animation:sobe .7s cubic-bezier(.2,.7,.2,1) .1s both}
+.leaflet-overlay-pane{animation:aparecer .6s ease both}
+@keyframes aparecer{from{opacity:0}to{opacity:1}}
+.pop-bts{display:flex;gap:8px;flex-wrap:wrap}.pop-bts .btn{flex:1 1 auto;justify-content:center}
+#pop .btn.ver{width:100%;justify-content:center;margin:8px 0}
+tr[data-esc],tr[data-verdet]{cursor:pointer}
+tr[data-esc]:hover td,tr[data-verdet]:hover td{background:rgba(85,184,230,.08)}
+#detCamada:empty{display:none}
+.esc-kpis .card b{display:block;font:800 22px/1.2 var(--display)}.esc-kpis .card span{font-size:12.5px;color:var(--muted)}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}.anim{opacity:1;transform:none}}
