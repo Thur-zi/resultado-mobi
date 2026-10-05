@@ -30,22 +30,23 @@
     <span class="tag"><span class="pulso parado"></span><span>Dados oficiais do TSE</span></span>
   </header>
   <div class="kicker">Eleições 2026 · Minas Gerais</div>
-  <h1>Presidente <span class="azul">2026</span> <span class="h1-comp">e o comparativo com 2022</span></h1>
+  <h1>Presidente <span class="azul" id="h1Ano">2026</span> <span class="h1-comp" id="h1Comp">resultado em Minas Gerais</span></h1>
   <p class="lead">Como Minas votou para Presidente em 2026: no estado, nas macrorregiões, nas regiões, nas zonas eleitorais e em cada cidade, com a comparação com 2022. E como os deputados federais e estaduais se saíram nesses mesmos lugares.</p>
 
   <section id="destaques" aria-label="Destaques"><div class="dest-grid" id="destGrid"><div class="carregando">Carregando os dados oficiais…</div></div></section>
 
   <div class="controles" id="controles">
     <nav class="modos" id="modos" role="tablist" aria-label="O que ver">
-      <button role="tab" data-g="pres" aria-selected="true"><span class="m-ico pres" aria-hidden="true"></span><span><b>Presidente</b><small>2026 · e o comparativo com 2022</small></span></button>
+      <button role="tab" data-g="pres" aria-selected="true"><span class="m-ico pres" aria-hidden="true"></span><span><b>Presidente</b><small>2026 · 2022 · comparação</small></span></button>
       <button role="tab" data-g="deps" aria-selected="false"><span class="m-ico deps" aria-hidden="true"></span><span><b>Deputados <span id="nDeps" class="bolinha" hidden></span></b><small>federais e estaduais</small></span></button>
       <button role="tab" data-g="mesc" aria-selected="false"><span class="m-ico mesc" aria-hidden="true"></span><span><b>Presidente × Deputados</b><small>cruzamento</small></span></button>
       <button role="tab" data-g="lugar" aria-selected="false" id="abaLugar" hidden><span class="pin" aria-hidden="true"></span><span><b id="abaLugarNome">Lugar</b><small id="abaLugarTipo">lugar escolhido</small></span></button>
     </nav>
     <div class="linha2">
+    <div class="anos-sel" id="anoSel" role="tablist" aria-label="Ano"><button role="tab" data-ano="26" aria-selected="true">2026</button><button role="tab" data-ano="22" aria-selected="false">2022</button><button role="tab" data-ano="cmp" aria-selected="false">2026 × 2022</button></div>
     <nav class="abas" id="abas" role="tablist" aria-label="Seções"></nav>
     <div class="barra-ctl">
-      <div class="grupo"><span class="rot">2026 contra</span>
+      <div class="grupo" id="turnoGrupo" hidden><span class="rot">2022</span>
         <div class="seg" id="turno" role="group" aria-label="Comparar 2026 com">
           <button data-t="1" aria-pressed="true">2022 · 1º turno</button><button data-t="2">2022 · 2º turno</button>
         </div></div>
@@ -61,7 +62,7 @@
       <label class="busca grande"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>
         <input id="qDep" placeholder="Digite o nome de um deputado…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="acDeps" aria-label="Escolher deputado"><div class="ac" id="acDeps" role="listbox" hidden></div></label>
       <div class="seg" id="filtroCargo" role="group" aria-label="Cargo"><button data-c="0" aria-pressed="true">Todos</button><button data-c="6">Federais</button><button data-c="7">Estaduais</button></div>
-      <div class="seg" id="filtroAno" role="group" aria-label="Ano"><button data-a="0" aria-pressed="true">2022 e 2026</button><button data-a="26">2026</button><button data-a="22">2022</button></div>
+      <div class="seg" id="filtroAno" role="group" aria-label="Ano"><button data-a="26" aria-pressed="true">2026</button><button data-a="22">2022</button><button data-a="0">2026 e 2022</button></div>
       <div id="chips" class="chips"></div>
     </div>
   </section>
@@ -73,10 +74,10 @@
       <li><b>2</b><div><strong>Busque um lugar</strong><span>Cidade, zona ou região: abre o comparativo com mapa e mais votados</span></div></li>
       <li><b>3</b><div><strong>Compare deputados</strong><span>Até 4, de 2022 ou 2026, entre si e com o voto para Presidente</span></div></li>
     </ol>
-    <div class="sec-cab"><h2>Minas Gerais: resultado de 2026</h2><p>Todos os candidatos a Presidente em 2026 e, ao lado, 2022 para comparar. <b>p.p.</b> = pontos percentuais (a diferença entre dois %).</p></div>
+    <div class="sec-cab"><h2 id="geralTitulo">Minas Gerais: resultado de 2026</h2><p id="geralSub"></p></div>
     <div id="quadro"></div>
     <div id="geralTop"></div>
-    <div class="sec-cab" style="margin-top:30px"><h2>Macrorregiões num relance</h2><p>Cada mapa mostra quem venceu em 2026 em cada cidade da macrorregião. Veja todas as regiões e microrregiões na aba <a href="#regioes" data-ir="regioes">Regiões</a>.</p></div>
+    <div class="sec-cab" style="margin-top:30px"><h2>Macrorregiões num relance</h2><p><span id="geralRegTxt"></span> Veja todas as regiões, microrregiões e zonas em <a href="#regioes" data-ir="regioes">Mapas das regiões</a>.</p></div>
     <div id="geralRegioes" class="galeria"></div>
   </section>
 

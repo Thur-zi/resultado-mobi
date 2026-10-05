@@ -28,11 +28,20 @@ const avatar = (foto, nome, cor, cls = "av") => foto
   : `<span class="${cls}" style="background:${cor}">${esc(nome[0] || "")}</span>`;
 Chart.defaults.color = "#a7adb4"; Chart.defaults.font.family = "Inter Tight, system-ui, sans-serif";
 
-const E = {B: null, nivel: "mun", turno: "1", deps: [], filtroCargo: 0, filtroAno: 0, unidades: [], sel: null, modo: "venc26", mapa: null, camada: null, geo: null, graficos: [], topAno: "26",
+const E = {B: null, nivel: "mun", turno: "1", deps: [], filtroCargo: 0, filtroAno: 26, unidades: [], sel: null, modo: "venc26", mapa: null, camada: null, geo: null, graficos: [], topAno: "26",
   aba: "geral", galNivel: "me", galModo: "venc26", galOrdem: "aptos", detModo: "venc26", detMapa: null, detCamada: null};
 const NIVEIS = {mg: "Minas Gerais", me: "Macrorregiões", mi: "Microrregiões", ri: "Regiões intermediárias", rm: "Regiões imediatas", zona: "Zonas eleitorais", mun: "Cidades"};
 const NIVEL1 = {mg: "Estado", me: "Macrorregião", mi: "Microrregião", ri: "Região intermediária", rm: "Região imediata", zona: "Zona eleitoral", mun: "Cidade"};
 const REGIAO = n => ["me", "mi", "ri", "rm"].includes(n);
+// ano das telas do Presidente: "26", "22" ou "cmp" (2026 × 2022)
+E.ano = "26";
+const CMP = () => E.ano === "cmp";
+const ANO = () => E.ano === "22" ? "22" : "26";
+const rotAno = y => y === "26" ? "2026" : `2022 · ${E.turno === "2" ? "2º" : "1º"} turno`;
+const nomeBol = y => y === "26" ? "Flávio" : "Jair";
+const curto = n => n === LULA ? "Lula" : n === FB ? "Flávio" : n === JB ? "Jair" : NOME_EXIBE(n).split(" ")[0];
+const barraAno = (u, y) => `<div class="duo"><i style="width:${(u["lula" + y] || 0) * 100}%;background:${COR.lula}"></i><i style="width:${(u["bol" + y] || 0) * 100}%;background:${COR.bolso}"></i></div>`;
+const linhaAno = (u, y, dest) => `<div class="${dest ? "a26" : ""}"><span>${y === "26" ? "2026" : "2022"}</span>${barraAno(u, y)}<small>${dest ? "<b>" : ""}${nomeBol(y)} ${pct(u["bol" + y])} · Lula ${pct(u["lula" + y])}${dest ? "</b>" : ""} · venceu ${esc(NOME_EXIBE(u["venc" + y]))}</small></div>`;
 
 function toast(t) { const el = $("#toast"); el.innerHTML = t; el.classList.add("on"); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove("on"), 3600); }
 
@@ -114,6 +123,7 @@ function irAba(aba, rolar = true) {
   $("#abas").innerHTML = GRUPOS[g].length > 1 ? GRUPOS[g].map(([k, n]) => `<button role="tab" data-aba="${k}" aria-selected="${k === aba}">${n}</button>`).join("") : "";
   $("#abas").hidden = GRUPOS[g].length < 2;
   $("#seletorDeps").hidden = !(g === "deps" || g === "mesc");
+  $("#anoSel").hidden = !(g === "pres" || g === "lugar"); $("#turnoGrupo").hidden = E.ano === "26" || !(g === "pres" || g === "lugar") ? !(g === "mesc") : false;
   $$(".painel").forEach(p => p.hidden = p.id !== "p-" + aba);
   if (history.replaceState) history.replaceState(null, "", "#" + aba);
   if (aba === "mapa") desenharMapa();
@@ -139,25 +149,39 @@ document.addEventListener("click", e => { const a = e.target.closest("[data-ir]"
 const renderDepsAtual = () => { if (E.aba === "deps") renderDeps(); if (E.aba === "depreg") depRegioes(); if (E.aba === "mesc") renderMesc(); };
 
 /* ---------------- destaques (Minas) */
-function destaques() {
+function destaques() { if (CMP()) destaquesCmp(); else destaquesAno(ANO()); }
+const abreU = u => `data-abrir="${u.nivel}|${esc(u.chave)}"`;
+function destaquesAno(y) {
+  const mg = somar(todasMz()), cid = agrupar("mun"), me = agrupar("me"), v = mg["v" + y], t = mg["t" + y], d = mg["d" + y];
+  const ord = Object.entries(v).sort((a, b) => b[1] - a[1]), [n1, q1] = ord[0], [n2, q2] = ord[1] || ["", 0];
+  const share = (u, n) => u["t" + y] ? (u["v" + y][n] || 0) / u["t" + y] : 0;
+  const c1 = cid.filter(c => c["venc" + y] === n1), c2 = cid.filter(c => c["venc" + y] === n2), elT = cid.reduce((a, c) => a + c.aptos, 0);
+  const me1 = me.slice().sort((a, b) => share(b, n1) - share(a, n1))[0], me2 = me.slice().sort((a, b) => share(b, n2) - share(a, n2))[0];
+  const big2 = c2.slice().sort((a, b) => b.aptos - a.aptos)[0];
+  $("#destGrid").innerHTML = `
+    <div class="dest forte"><span class="dl">Quem venceu em Minas · ${rotAno(y)}</span><b>${esc(NOME_EXIBE(n1))}</b><span>${pct(q1 / t)} contra ${pct(q2 / t)} de ${esc(NOME_EXIBE(n2))} · diferença de ${int(q1 - q2)} votos</span></div>
+    <div class="dest d26"><span class="dl">Resultado em Minas · ${rotAno(y)}</span><b><span style="color:${corCand(n1)}">${pct(q1 / t)}</span> × <span style="color:${corCand(n2)}">${pct(q2 / t)}</span></b><span>${esc(NOME_EXIBE(n1))} × ${esc(NOME_EXIBE(n2))} · ${int(t)} votos válidos</span></div>
+    <button class="dest d26" data-ir="mapa"><span class="dl">Cidades vencidas · ${rotAno(y)}</span><b>${int(c1.length)} <small>${esc(curto(n1))}</small> · ${int(c2.length)} <small>${esc(curto(n2))}</small></b><span>As cidades de ${esc(curto(n1))} somam ${pct(c1.reduce((a, c) => a + c.aptos, 0) / elT)} dos eleitores de Minas</span></button>
+    <button class="dest" ${abreU(me1)}><span class="dl">Onde ${esc(curto(n1))} foi mais forte</span><b>${esc(me1.nome)}</b><span>${pct(share(me1, n1))} dos válidos nesta macrorregião</span></button>
+    <button class="dest" ${abreU(me2)}><span class="dl">Onde ${esc(curto(n2))} foi mais forte</span><b>${esc(me2.nome)}</b><span>${pct(share(me2, n2))} dos válidos nesta macrorregião</span></button>
+    ${big2 ? `<button class="dest" ${abreU(big2)}><span class="dl">Maior cidade vencida por ${esc(curto(n2))}</span><b>${esc(big2.nome)}</b><span>${pct(share(big2, n2))} · ${int(big2.aptos)} eleitores</span></button>` : ""}
+    <div class="dest"><span class="dl">Comparecimento · ${rotAno(y)}</span><b>${pct(d[1] / d[0])}</b><span>Abstenção ${pct(d[2] / d[0])} · brancos ${pct(d[3] / d[1])} · nulos ${pct(d[4] / d[1])}</span></div>`;
+}
+function destaquesCmp() {
   const mg = somar(todasMz()), cid = agrupar("mun"), me = agrupar("me");
   const t22 = E.turno === "1" ? "1º turno de 2022" : "2º turno de 2022";
   const l2b = cid.filter(c => familia(c.venc22) === "lula" && familia(c.venc26) === "bolso").length;
   const b2l = cid.filter(c => familia(c.venc22) === "bolso" && familia(c.venc26) === "lula").length;
   const maxB = cid.filter(c => c.aptos >= 50000).sort((a, b) => b.dBol - a.dBol)[0];
   const meL = me.slice().sort((a, b) => a.dLula - b.dLula)[0], meM = me.slice().sort((a, b) => b.dLula - a.dLula)[0];
-  const abre = (u) => `data-abrir="${u.nivel}|${esc(u.chave)}"`;
-  const vF = cid.filter(c => familia(c.venc26) === "bolso"), vL = cid.filter(c => familia(c.venc26) === "lula");
-  const elF = vF.reduce((t, c) => t + c.aptos, 0), elT = cid.reduce((t, c) => t + c.aptos, 0);
   $("#destGrid").innerHTML = `
-    <div class="dest forte"><span class="dl">Quem venceu em Minas em 2026</span><b>${esc(NOME_EXIBE(mg.venc26))}</b><span>${pct(mg.bol26)} contra ${pct(mg.lula26)} do Lula · diferença de ${int(Math.abs((mg.v26[FB] || 0) - (mg.v26[LULA] || 0)))} votos</span></div>
-    <div class="dest d26"><span class="dl">Resultado em Minas · 2026</span><b><span style="color:${COR.bolso}">${pct(mg.bol26)}</span> × <span style="color:${COR.lula}">${pct(mg.lula26)}</span></b><span>Flávio Bolsonaro × Lula · ${int(mg.t26)} votos válidos · abstenção ${pct(mg.abst26)}</span></div>
-    <button class="dest d26" data-ir="mapa"><span class="dl">Cidades em 2026</span><b>${int(vF.length)} <small>Flávio</small> · ${int(vL.length)} <small>Lula</small></b><span>As cidades do Flávio somam ${pct(elF / elT)} dos eleitores de Minas</span></button>
-    <div class="dest"><span class="dl">Comparado a 2022 · Lula (${t22})</span><b class="${mg.dLula > 0 ? "pos" : "neg"}">${pp(mg.dLula)}</b><span>${pct(mg.lula22)} em 2022 → ${pct(mg.lula26)} em 2026</span></div>
-    <div class="dest"><span class="dl">Comparado a 2022 · Jair → Flávio Bolsonaro</span><b class="${mg.dBol > 0 ? "pos" : "neg"}">${pp(mg.dBol)}</b><span>${pct(mg.bol22)} em 2022 → ${pct(mg.bol26)} em 2026</span></div>
-    <button class="dest" data-ir="mapa"><span class="dl">Cidades que mudaram de lado desde 2022</span><b>${int(l2b + b2l)} <small>de ${int(cid.length)}</small></b><span>${int(l2b)} saíram do Lula para o Flávio · ${int(b2l)} do Bolsonaro para o Lula</span></button>
-    <button class="dest" ${abre(meL)}><span class="dl">Macrorregião onde o Lula mais caiu</span><b>${esc(meL.nome)}</b><span>${pp(meL.dLula)} · onde menos caiu: ${esc(meM.nome)} (${pp(meM.dLula)})</span></button>
-    ${maxB ? `<button class="dest" ${abre(maxB)}><span class="dl">Maior avanço do Flávio sobre o Jair <small>(cidades com 50 mil+ eleitores)</small></span><b>${esc(maxB.nome)}</b><span>${pp(maxB.dBol)} · ${pct(maxB.bol22)} → ${pct(maxB.bol26)}</span></button>` : ""}`;
+    <div class="dest forte"><span class="dl">Vencedor em Minas · 2026 × ${t22}</span><b>${esc(curto(mg.venc26))} <small>em 2026</small> · ${esc(curto(mg.venc22))} <small>em 2022</small></b><span>${mg.virou ? "Minas mudou de lado" : "Minas manteve o lado"}</span></div>
+    <div class="dest"><span class="dl">Lula · 2022 → 2026</span><b class="${mg.dLula > 0 ? "pos" : "neg"}">${pp(mg.dLula)}</b><span>${pct(mg.lula22)} em 2022 → ${pct(mg.lula26)} em 2026</span></div>
+    <div class="dest"><span class="dl">Bolsonaro · Jair (2022) → Flávio (2026)</span><b class="${mg.dBol > 0 ? "pos" : "neg"}">${pp(mg.dBol)}</b><span>${pct(mg.bol22)} → ${pct(mg.bol26)}</span></div>
+    <button class="dest" data-ir="mapa"><span class="dl">Cidades que mudaram de lado</span><b>${int(l2b + b2l)} <small>de ${int(cid.length)}</small></b><span>${int(l2b)} saíram do Lula para o Flávio · ${int(b2l)} do Bolsonaro para o Lula</span></button>
+    <button class="dest" ${abreU(meL)}><span class="dl">Macrorregião onde o Lula mais caiu</span><b>${esc(meL.nome)}</b><span>${pp(meL.dLula)} · onde menos caiu: ${esc(meM.nome)} (${pp(meM.dLula)})</span></button>
+    ${maxB ? `<button class="dest" ${abreU(maxB)}><span class="dl">Maior avanço do Flávio sobre o Jair <small>(cidades com 50 mil+ eleitores)</small></span><b>${esc(maxB.nome)}</b><span>${pp(maxB.dBol)} · ${pct(maxB.bol22)} → ${pct(maxB.bol26)}</span></button>` : ""}
+    <div class="dest"><span class="dl">Abstenção · 2022 → 2026</span><b>${pct(mg.abst22)} → ${pct(mg.abst26)}</b><span>Brancos e nulos: ${pct(mg.bn22)} → ${pct(mg.bn26)}</span></div>`;
 }
 document.addEventListener("click", e => { if (e.target.closest("[data-pop]")) return; const a = e.target.closest("[data-abrir]"); if (a) { const [n, ...c] = a.dataset.abrir.split("|"); abrir(n, c.join("|")); } });
 
@@ -168,23 +192,41 @@ function listaCand(v, tot, fotos, n = 12) {
     <div><div class="n">${esc(NOME_EXIBE(nome))}${i === 0 ? '<span class="tag-v">mais votado</span>' : ""}<small>${logo(E.partidos.get(nome) || "")}${esc(E.partidos.get(nome) || "")}</small></div><div class="b"><i style="width:${q / mx * 100}%;background:${corCand(nome)}"></i></div></div>
     <div class="v"><b>${pct(q / tot)}</b><small>${int(q)} votos</small></div></div>`).join("");
 }
-function quadro(u, alvo) {
+function quadro(u, alvo) { if (CMP()) quadroCmp(u, alvo); else quadroAno(u, alvo, ANO()); }
+function quadroAno(u, alvo, y) {
+  const v = u["v" + y], t = u["t" + y], d = u["d" + y], ord = Object.entries(v).sort((a, b) => b[1] - a[1]);
+  const [n1, q1] = ord[0] || ["", 0], [n2, q2] = ord[1] || ["", 0];
+  alvo.innerHTML = `<div class="ano-unico"><div class="card ano a26"><h4>${rotAno(y)} <span class="tag-ano">resultado</span></h4>${listaCand(v, t, y === "26" ? E.fotos26 : E.fotos22, 14)}</div>
+    <div class="delta delta-ano">
+      <div class="card destaque"><div class="l">Vencedor</div><div class="v txt" style="color:${corCand(n1)}">${esc(NOME_EXIBE(n1))}</div><div class="s">${pct(q1 / t)} dos votos válidos</div></div>
+      <div class="card"><div class="l">Vantagem sobre ${esc(curto(n2))}</div><div class="v txt">${int(q1 - q2)}</div><div class="s">votos · ${pp((q1 - q2) / t)}</div></div>
+      <div class="card"><div class="l">Eleitores</div><div class="v txt">${int(d[0])}</div><div class="s">aptos a votar</div></div>
+      <div class="card"><div class="l">Comparecimento</div><div class="v txt">${pct(d[1] / d[0])}</div><div class="s">${int(d[1])} votaram</div></div>
+      <div class="card"><div class="l">Abstenção</div><div class="v txt">${pct(d[2] / d[0])}</div><div class="s">${int(d[2])} não votaram</div></div>
+      <div class="card"><div class="l">Brancos</div><div class="v txt">${pct(d[3] / d[1])}</div><div class="s">${int(d[3])} votos</div></div>
+      <div class="card"><div class="l">Nulos</div><div class="v txt">${pct(d[4] / d[1])}</div><div class="s">${int(d[4])} votos</div></div>
+      <div class="card"><div class="l">Votos válidos</div><div class="v txt">${int(t)}</div><div class="s">para Presidente</div></div>
+    </div></div>`;
+}
+function quadroCmp(u, alvo) {
   const t = E.turno === "1" ? "2022 · 1º turno" : "2022 · 2º turno";
   const cls = v => v > 0 ? "pos" : v < 0 ? "neg" : "";
-  alvo.innerHTML = `<div class="anos"><div class="card ano a26"><h4>2026 · 1º turno <span class="tag-ano">resultado</span></h4>${listaCand(u.v26, u.t26, E.fotos26)}</div>
-    <div class="card ano a22"><h4>${t} <span class="tag-ano cmp">comparação</span></h4>${listaCand(u.v22, u.t22, E.fotos22)}</div></div>
+  // candidatos dos dois anos lado a lado, 2026 primeiro
+  alvo.innerHTML = `<div class="anos"><div class="card ano a26"><h4>2026 · 1º turno</h4>${listaCand(u.v26, u.t26, E.fotos26)}</div>
+    <div class="card ano"><h4>${t}</h4>${listaCand(u.v22, u.t22, E.fotos22)}</div></div>
     <div class="delta">
-      <div class="card ${u.virou ? "alerta" : ""}"><div class="l">Vencedor em 2026</div><div class="v txt">${esc(NOME_EXIBE(u.venc26))}</div><div class="s">em 2022: ${esc(NOME_EXIBE(u.venc22))}</div><div class="s">${u.virou ? "<b>mudou de lado</b>" : "manteve o lado"}</div></div>
-      <div class="card"><div class="l">Abstenção 2026</div><div class="v txt">${pct(u.abst26)}</div><div class="s">em 2022: ${pct(u.abst22)}</div></div>
-      <div class="card"><div class="l">Brancos e nulos 2026</div><div class="v txt">${pct(u.bn26)}</div><div class="s">em 2022: ${pct(u.bn22)}</div></div>
-      <div class="card"><div class="l">Votos válidos 2026</div><div class="v txt">${int(u.t26)}</div><div class="s">em 2022: ${int(u.t22)} · ${int(u.aptos)} eleitores</div></div>
-      <div class="card"><div class="l">Lula · variação</div><div class="v ${cls(u.dLula)}">${pp(u.dLula)}</div><div class="s">${pct(u.lula22)} → ${pct(u.lula26)}<br>${int(u.v22[LULA])} → ${int(u.v26[LULA])} votos</div></div>
+      <div class="card ${u.virou ? "alerta" : ""}"><div class="l">Vencedor</div><div class="v txt">${esc(curto(u.venc26))} <small>2026</small> · ${esc(curto(u.venc22))} <small>2022</small></div><div class="s">${u.virou ? "<b>mudou de lado</b>" : "manteve o lado"}</div></div>
+      <div class="card"><div class="l">Lula · 2022 → 2026</div><div class="v ${cls(u.dLula)}">${pp(u.dLula)}</div><div class="s">${pct(u.lula22)} → ${pct(u.lula26)}<br>${int(u.v22[LULA])} → ${int(u.v26[LULA])} votos</div></div>
       <div class="card"><div class="l">Jair (2022) → Flávio (2026)</div><div class="v ${cls(u.dBol)}">${pp(u.dBol)}</div><div class="s">${pct(u.bol22)} → ${pct(u.bol26)}<br>${int(u.v22[JB])} → ${int(u.v26[FB])} votos</div></div>
+      <div class="card"><div class="l">Abstenção</div><div class="v txt">${pct(u.abst22)} → ${pct(u.abst26)}</div><div class="s">2022 → 2026</div></div>
+      <div class="card"><div class="l">Brancos e nulos</div><div class="v txt">${pct(u.bn22)} → ${pct(u.bn26)}</div><div class="s">2022 → 2026</div></div>
+      <div class="card"><div class="l">Votos válidos</div><div class="v txt">${int(u.t22)} → ${int(u.t26)}</div><div class="s">2022 → 2026</div></div>
     </div>`;
 }
 
 /* ---------------- cores e legendas (compartilhadas por todos os mapas) */
-const MODOS = () => [["venc26", "Vencedor 2026"], ["bol26", "Flávio 2026"], ["lula26", "Lula 2026"], ["abst26", "Abstenção 2026"], ["venc22", "Vencedor 2022"], ["virou", "Mudou de lado"], ["dBol", "Δ Bolsonaro"], ["dLula", "Δ Lula"], ["bol22", "Jair 2022"], ["lula22", "Lula 2022"]]
+const MODOS_ANO = y => [["venc" + y, "Vencedor"], ["bol" + y, y === "26" ? "Flávio Bolsonaro" : "Jair Bolsonaro"], ["lula" + y, "Lula"], ["abst" + y, "Abstenção"], ["bn" + y, "Brancos e nulos"]];
+const MODOS = () => (CMP() ? [["venc26", "Vencedor 2026"], ["venc22", "Vencedor 2022"], ["virou", "Mudou de lado"], ["dBol", "Δ Bolsonaro"], ["dLula", "Δ Lula"], ["bol26", "Flávio 2026"], ["bol22", "Jair 2022"], ["lula26", "Lula 2026"], ["lula22", "Lula 2022"]] : MODOS_ANO(ANO()))
   .concat(E.deps.flatMap((s, j) => [["rk" + j, `${s.d.nome} ${s.d.ano}: onde foi o mais votado`], ["dp" + j, `${s.d.nome} ${s.d.ano}: %`]])).concat(E.deps.length > 1 ? [["melhor", "Qual deputado foi melhor"]] : []);
 const mistura = (c, t) => { const a = parseInt(c.slice(1), 16), b = 0x11171d; const r = s => Math.round(((b >> s) & 255) * (1 - t) + ((a >> s) & 255) * t); return `rgb(${r(16)},${r(8)},${r(0)})`; };
 const rampa = c => [.18, .36, .56, .78, 1].map(t => mistura(c, t));
@@ -226,17 +268,18 @@ function legenda(modo, q) {
   return c.map((cor, i) => `<span><b style="background:${cor}"></b>${i === 0 ? "até " + f(q[0]) : i === 4 ? "acima de " + f(q[3]) : f(q[i - 1]) + " a " + f(q[i])}</span>`).join("") + `<span class="nota">(5 faixas com o mesmo número de lugares)</span>`;
 }
 function dica(u) {
-  return `<b>${esc(u.nome)}</b><br><b>2026: Flávio ${pct(u.bol26)} · Lula ${pct(u.lula26)}</b><br>2022: Jair ${pct(u.bol22)} · Lula ${pct(u.lula22)}<br>Δ Lula ${pp(u.dLula)} · Δ Bolsonaro ${pp(u.dBol)}${u.virou ? " · <b style='color:#fab219'>mudou de lado</b>" : ""}`
-    + (u.f26 ? `<br>Mais votados 2026: <b>${esc(u.f26[0].nome)}</b> (fed.) · <b>${esc(u.e26?.[0].nome)}</b> (est.)` : "")
-    + (u.f22 ? `<br>Mais votados 2022: ${esc(u.f22[0].nome)} (fed.) · ${esc(u.e22?.[0].nome)} (est.)` : "")
+  const y = ANO(), mv = a => u["f" + a] ? `<br>Mais votados ${a === "26" ? "2026" : "2022"}: <b>${esc(u["f" + a][0].nome)}</b> (fed.) · <b>${esc(u["e" + a]?.[0].nome)}</b> (est.)` : "";
+  return `<b>${esc(u.nome)}</b>` + (CMP()
+    ? `<br><b>2026: Flávio ${pct(u.bol26)} · Lula ${pct(u.lula26)}</b><br>2022: Jair ${pct(u.bol22)} · Lula ${pct(u.lula22)}<br>Δ Lula ${pp(u.dLula)} · Δ Bolsonaro ${pp(u.dBol)}${u.virou ? " · <b style='color:#fab219'>mudou de lado</b>" : ""}` + mv("26") + mv("22")
+    : `<br><b>${rotAno(y)}: ${nomeBol(y)} ${pct(u["bol" + y])} · Lula ${pct(u["lula" + y])}</b><br>Venceu: ${esc(NOME_EXIBE(u["venc" + y]))} · abstenção ${pct(u["abst" + y])}` + mv(y))
     + E.deps.map((s, j) => `<br><i style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${s.cor}"></i> ${esc(s.d.nome)} ${s.d.ano}: ${int(u["dv" + j])} votos (${pct(u["dp" + j], 2)})${u["rk" + j] ? ` · <b>${u["rk" + j] === 1 ? "1º, mais votado" : u["rk" + j] < 99 ? u["rk" + j] + "º" : "abaixo do 20º"}</b>` : ""}`).join("");
 }
 const botoesModo = (sel, atual) => {
-  const pres = [["26", E.B.cand26], ["22", E.B.cand22["1"]]].flatMap(([a, l]) => l.map(c => [`pr${a}:${c[0]}`, `${NOME_EXIBE(c[0])} · 20${a}`]));
+  const pres = [["26", E.B.cand26], ["22", E.B.cand22[E.turno]]].filter(([a]) => CMP() || a === ANO()).flatMap(([a, l]) => l.map(c => [`pr${a}:${c[0]}`, `${NOME_EXIBE(c[0])}${CMP() ? " · 20" + a : ""}`]));
   $(sel).innerHTML = MODOS().map(([k, n]) => { const j = /^(dp|rk)(\d)/.exec(k); return `<button data-m="${k}" aria-pressed="${atual === k}">${j ? `<i class="pt" style="background:${E.deps[+j[2]].cor}"></i>` : ""}${esc(n)}</button>`; }).join("")
     + `<select class="sel-pres${/^pr/.test(atual) ? " on" : ""}" aria-label="Candidato a Presidente: onde foi o mais votado"><option value="">Presidente: onde foi o mais votado…</option>${pres.map(([k, n]) => `<option value="${esc(k)}" ${k === atual ? "selected" : ""}>${esc(n)}</option>`).join("")}</select>`;
 };
-const validaModo = m => MODOS().some(x => x[0] === m) || /^pr(22|26):/.test(m) ? m : "venc26";
+const validaModo = m => MODOS().some(x => x[0] === m) || (/^pr(22|26):/.test(m) && (CMP() || m.slice(2, 4) === ANO())) ? m : "venc" + (CMP() ? "26" : ANO());
 document.addEventListener("change", e => {
   const s = e.target.closest(".sel-pres"); if (!s || !s.value) return;
   const id = s.parentElement.id;
@@ -270,24 +313,32 @@ function miniSvg(itens, cls = "mini-mapa") {
 const localizador = ibges => `<svg class="loc" viewBox="${E.vbMG}" aria-hidden="true"><use href="#mgTodo" fill="#2a333d"/><path d="${ibges.map(i => E.pth.get(i) || "").join("")}" fill="${COR.brand}"/></svg>`;
 function cartaoRegiao(u, modo, q, cidMap) {
   const muns = cidadesDe(u);
-  const itens = muns.map(m => { const c = cidMap.get(m); return {ibge: ibgeDe(m), pop: `mun|${m}`, cor: corValor(c, modo, q), titulo: c ? `${c.nome}: Lula ${pct(c.lula26)} · Flávio ${pct(c.bol26)}` : ""}; });
-  const viraram = muns.filter(m => cidMap.get(m)?.virou).length, nLula = muns.filter(m => familia(cidMap.get(m)?.venc26) === "lula").length;
+  const y = ANO();
+  const itens = muns.map(m => { const c = cidMap.get(m); return {ibge: ibgeDe(m), pop: `mun|${m}`, cor: corValor(c, modo, q), titulo: c ? `${c.nome}: ${nomeBol(y)} ${pct(c["bol" + y])} · Lula ${pct(c["lula" + y])}` : ""}; });
+  const viraram = muns.filter(m => cidMap.get(m)?.virou).length, nLula = muns.filter(m => familia(cidMap.get(m)?.["venc" + y]) === "lula").length;
   const barra = (a, b, ca, cb) => `<div class="duo"><i style="width:${a * 100}%;background:${ca}"></i><i style="width:${b * 100}%;background:${cb}"></i></div>`;
   return `<div class="card regiao" role="button" tabindex="0" data-focar="${u.nivel}|${esc(u.chave)}" aria-label="Ver ${esc(u.nome)} grande no mapa">
     <div class="rg-cab"><div><b>${esc(u.nivel === "me" ? u.nome : u.nome.replace(/^(Microrregião|Região intermediária|Região imediata) de /, ""))}</b><small>${int(muns.length)} ${muns.length === 1 ? "cidade" : "cidades"} · ${int(u.aptos)} eleitores</small></div>${localizador(muns.map(ibgeDe))}</div>
     ${miniSvg(itens)}
-    <div class="rg-venc"><span class="venc"><i style="background:${corCand(u.venc26)}"></i>${esc(NOME_EXIBE(u.venc26))}</span>${u.virou ? '<span class="virou">virou</span>' : ""}</div>
+${CMP() ? `
+    <div class="rg-venc"><span class="venc"><i style="background:${corCand(u.venc26)}"></i>${esc(curto(u.venc26))} em 2026</span> · <span class="venc"><i style="background:${corCand(u.venc22)}"></i>${esc(curto(u.venc22))} em 2022</span>${u.virou ? '<span class="virou">virou</span>' : ""}</div>
     <div class="rg-linha a26"><span>2026</span>${barra(u.lula26, u.bol26, COR.lula, COR.bolso)}<small><b>Flávio ${pct(u.bol26)} · Lula ${pct(u.lula26)}</b></small></div>
     <div class="rg-linha"><span>2022</span>${barra(u.lula22, u.bol22, COR.lula, COR.bolso)}<small>Jair ${pct(u.bol22)} · Lula ${pct(u.lula22)}</small></div>
-    <div class="rg-chips"><span class="${u.dLula > 0 ? "pos" : "neg"}">Lula ${pp(u.dLula)}</span><span class="${u.dBol > 0 ? "pos" : "neg"}">Bolsonaro ${pp(u.dBol)}</span><span>${int(nLula)} de ${int(muns.length)} com Lula</span>${viraram ? `<span class="am">${int(viraram)} viraram</span>` : ""}</div>
-    ${u.f26 ? `<div class="rg-top"><span>Mais votados 2026</span>${celTop(u.f26)}${celTop(u.e26)}</div>` : ""}
-    <div class="rg-bts"><span class="rg-ver">Ver no mapa ↗</span><button type="button" class="btn mini" data-abrir="${u.nivel}|${esc(u.chave)}">Comparativo completo →</button></div>
+    <div class="rg-chips"><span class="${u.dLula > 0 ? "pos" : "neg"}">Lula ${pp(u.dLula)}</span><span class="${u.dBol > 0 ? "pos" : "neg"}">Bolsonaro ${pp(u.dBol)}</span>${viraram ? `<span class="am">${int(viraram)} viraram</span>` : ""}</div>` : `
+    <div class="rg-venc"><span class="venc"><i style="background:${corCand(u["venc" + y])}"></i>${esc(NOME_EXIBE(u["venc" + y]))}</span> <small class="nota">venceu em ${y === "26" ? "2026" : "2022"}</small></div>
+    <div class="rg-linha a26"><span>${y === "26" ? "2026" : "2022"}</span>${barra(u["lula" + y], u["bol" + y], COR.lula, COR.bolso)}<small><b>${nomeBol(y)} ${pct(u["bol" + y])} · Lula ${pct(u["lula" + y])}</b></small></div>
+    <div class="rg-chips"><span>${int(nLula)} de ${int(muns.length)} com Lula</span><span>${int(muns.length - nLula)} com ${nomeBol(y)}</span><span>Abstenção ${pct(u["abst" + y])}</span></div>`}
+    ${u["f" + (CMP() ? "26" : y)] ? `<div class="rg-top"><span>Mais votados ${CMP() || y === "26" ? "2026" : "2022"}</span>${celTop(u["f" + (CMP() ? "26" : y)])}${celTop(u["e" + (CMP() ? "26" : y)])}</div>` : ""}
+    <div class="rg-bts"><span class="rg-ver">Ver no mapa ↗</span><button type="button" class="btn mini" data-abrir="${u.nivel}|${esc(u.chave)}">Ver tudo →</button></div>
     ${E.deps.length ? `<div class="rg-deps">${E.deps.map((s, j) => { const nm = muns.filter(m => cidMap.get(m)?.["rk" + j] === 1).length; return `<span><i style="background:${s.cor}"></i>${esc(s.d.nome)} ${s.d.ano}: <b>${pct(u["dp" + j], 2)}</b> · ${u["rk" + j] === 1 ? "<b>1º aqui</b>" : u["rk" + j] < 99 ? u["rk" + j] + "º aqui" : "abaixo do 20º"} · mais votado em ${int(nm)} ${nm === 1 ? "cidade" : "cidades"}</span>`; }).join("")}</div>` : ""}
   </div>`;
 }
 function galeria() {
   E.galModo = validaModo(E.galModo); botoesModo("#galModo", E.galModo);
   const cid = agrupar("mun"), cidMap = new Map(cid.map(c => [c.chave, c])), q = quebras(cid.map(c => c[E.galModo]));
+  const y = ANO(), ordens = CMP() ? [["aptos", "Eleitores"], ["nome", "Nome"], ["dLula", "Maior queda do Lula"], ["dBol", "Maior alta do Bolsonaro"]] : [["aptos", "Eleitores"], ["nome", "Nome"], ["bol" + y, "Mais " + nomeBol(y)], ["lula" + y, "Mais Lula"], ["abst" + y, "Mais abstenção"]];
+  if (!ordens.some(x => x[0] === E.galOrdem)) E.galOrdem = "aptos";
+  $("#galOrdem").innerHTML = ordens.map(([k, n]) => `<button data-o="${k}" aria-pressed="${k === E.galOrdem}">${n}</button>`).join("");
   const o = E.galOrdem, lista = agrupar(E.galNivel).slice().sort((a, b) => o === "nome" ? a.nome.localeCompare(b.nome) : o === "dLula" ? a.dLula - b.dLula : (b[o] - a[o]));
   $("#galLegenda").innerHTML = `<span class="nota">Cidades pintadas por <strong>${esc(nomeModo(E.galModo))}</strong>:</span>` + legenda(E.galModo, q);
   // desenha em lotes para a página não travar (zonas e regiões imediatas têm muitos cartões)
@@ -298,8 +349,9 @@ function galeria() {
   lote();
 }
 function galeriaGeral() {
-  const cid = agrupar("mun"), cidMap = new Map(cid.map(c => [c.chave, c])), q = quebras(cid.map(c => c.venc26));
-  $("#geralRegioes").innerHTML = agrupar("me").slice().sort((a, b) => b.aptos - a.aptos).map(u => cartaoRegiao(u, "venc26", q, cidMap)).join("");
+  const m = "venc" + (CMP() ? "26" : ANO()), cid = agrupar("mun"), cidMap = new Map(cid.map(c => [c.chave, c])), q = quebras(cid.map(c => c[m]));
+  $("#geralRegioes").innerHTML = agrupar("me").slice().sort((a, b) => b.aptos - a.aptos).map(u => cartaoRegiao(u, CMP() ? "virou" : m, q, cidMap)).join("");
+  $("#geralRegTxt").innerHTML = CMP() ? "Cada mapa mostra as cidades que <b>mudaram de lado</b> entre 2022 e 2026." : `Cada mapa mostra quem venceu em <b>${rotAno(ANO())}</b> em cada cidade.`;
 }
 $("#galNivel").addEventListener("click", e => { const b = e.target.closest("[data-g]"); if (!b) return; E.galNivel = b.dataset.g; $$("#galNivel button").forEach(x => x.setAttribute("aria-pressed", x === b)); galeria(); });
 $("#galModo").addEventListener("click", e => { const b = e.target.closest("[data-m]"); if (b) { E.galModo = b.dataset.m; galeria(); } });
@@ -307,28 +359,33 @@ $("#galOrdem").addEventListener("click", e => { const b = e.target.closest("[dat
 
 /* ---------------- tabela */
 let ord = {k: "aptos", dir: -1}, filtroTab = "";
+const colVenc = y => ({t: "Vencedor", k: "venc" + y, f: u => `<span class="venc"><i style="background:${corCand(u["venc" + y])}"></i>${esc(NOME_EXIBE(u["venc" + y]))}</span>`});
 const COLS = () => [
   {t: "Lugar", k: "nome", f: u => `<b>${esc(u.nome)}</b>`},
   {t: "Eleitores", k: "aptos", f: u => int(u.aptos)},
+].concat(CMP() ? [
   {t: "Vencedor 2026", k: "venc26", f: u => `<span class="venc"><i style="background:${corCand(u.venc26)}"></i>${esc(NOME_EXIBE(u.venc26))}</span>${u.virou ? '<span class="virou">virou</span>' : ""}`},
-  {t: "Flávio 2026", k: "bol26", f: u => `<b>${pct(u.bol26)}</b>`}, {t: "Lula 2026", k: "lula26", f: u => `<b>${pct(u.lula26)}</b>`},
-  {t: "Abstenção 2026", k: "abst26", f: u => pct(u.abst26)}, {t: "Brancos+nulos 2026", k: "bn26", f: u => pct(u.bn26)},
   {t: "Vencedor 2022", k: "venc22", f: u => `<span class="venc"><i style="background:${corCand(u.venc22)}"></i>${esc(NOME_EXIBE(u.venc22))}</span>`},
-  {t: "Jair 2022", k: "bol22", f: u => pct(u.bol22)}, {t: "Lula 2022", k: "lula22", f: u => pct(u.lula22)},
+  {t: "Flávio 2026", k: "bol26", f: u => pct(u.bol26)}, {t: "Jair 2022", k: "bol22", f: u => pct(u.bol22)},
   {t: "Δ Bolsonaro", k: "dBol", f: u => `<span class="${u.dBol > 0 ? "pos" : "neg"}">${pp(u.dBol)}</span>`},
+  {t: "Lula 2026", k: "lula26", f: u => pct(u.lula26)}, {t: "Lula 2022", k: "lula22", f: u => pct(u.lula22)},
   {t: "Δ Lula", k: "dLula", f: u => `<span class="${u.dLula > 0 ? "pos" : "neg"}">${pp(u.dLula)}</span>`},
-  {t: "Abstenção 2022", k: "abst22", f: u => pct(u.abst22)},
-  {t: "Federal + votado 26", k: "f26n", f: u => celTop(u.f26)}, {t: "Estadual + votado 26", k: "e26n", f: u => celTop(u.e26)},
-  {t: "Federal + votado 22", k: "f22n", f: u => celTop(u.f22)}, {t: "Estadual + votado 22", k: "e22n", f: u => celTop(u.e22)},
-].concat(E.deps.flatMap((s, j) => [{t: `${s.d.nome} ${s.d.ano}: votos`, k: "dv" + j, cor: s.cor, f: u => int(u["dv" + j])}, {t: `${s.d.nome} ${s.d.ano}: %`, k: "dp" + j, cor: s.cor, f: u => pct(u["dp" + j], 2)}]));
+  {t: "Abstenção 2026", k: "abst26", f: u => pct(u.abst26)}, {t: "Abstenção 2022", k: "abst22", f: u => pct(u.abst22)},
+  {t: "Federal + votado 26", k: "f26n", f: u => celTop(u.f26)}, {t: "Federal + votado 22", k: "f22n", f: u => celTop(u.f22)},
+  {t: "Estadual + votado 26", k: "e26n", f: u => celTop(u.e26)}, {t: "Estadual + votado 22", k: "e22n", f: u => celTop(u.e22)},
+] : (y => [colVenc(y),
+  {t: y === "26" ? "Flávio Bolsonaro" : "Jair Bolsonaro", k: "bol" + y, f: u => `<b>${pct(u["bol" + y])}</b>`}, {t: "Lula", k: "lula" + y, f: u => `<b>${pct(u["lula" + y])}</b>`},
+  {t: "Votos válidos", k: "t" + y, f: u => int(u["t" + y])}, {t: "Abstenção", k: "abst" + y, f: u => pct(u["abst" + y])}, {t: "Brancos+nulos", k: "bn" + y, f: u => pct(u["bn" + y])},
+  {t: "Federal + votado", k: "f" + y + "n", f: u => celTop(u["f" + y])}, {t: "Estadual + votado", k: "e" + y + "n", f: u => celTop(u["e" + y])},
+])(ANO())).concat(E.deps.flatMap((s, j) => [{t: `${s.d.nome} ${s.d.ano}: votos`, k: "dv" + j, cor: s.cor, f: u => int(u["dv" + j])}, {t: `${s.d.nome} ${s.d.ano}: %`, k: "dp" + j, cor: s.cor, f: u => pct(u["dp" + j], 2)}]));
 function tabela() {
   const cols = COLS(), linhas = E.unidades.filter(u => !filtroTab || semAc(u.nome).includes(filtroTab))
     .sort((a, b) => { const x = a[ord.k], y = b[ord.k]; return (typeof x === "string" ? x.localeCompare(y) : ((x ?? -1e9) - (y ?? -1e9))) * ord.dir; });
   $("#tabela").innerHTML = `<table><thead><tr>${cols.map(c => `<th data-k="${c.k}" ${c.cor ? `style="box-shadow:inset 0 -3px 0 ${c.cor}"` : ""} ${c.k === ord.k ? `aria-sort="${ord.dir < 0 ? "descending" : "ascending"}"` : ""}>${esc(c.t)}</th>`).join("")}</tr></thead>
     <tbody>${linhas.map(u => `<tr data-ch="${esc(u.chave)}">${cols.map(c => `<td>${c.f(u)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
-  $("#tabTitulo").textContent = `Tabela · ${NIVEIS[E.nivel]} (${int(E.unidades.length)})`;
-  const viraram = E.unidades.filter(u => u.virou).length;
-  $("#tabNota").innerHTML = E.nivel === "mg" ? "Escolha um recorte em <b>Ver por</b> para listar cidades, zonas ou regiões." : `<b>${int(viraram)} de ${int(E.unidades.length)}</b> mudaram de lado entre o ${E.turno === "1" ? "1º" : "2º"} turno de 2022 e 2026.`;
+  $("#tabTitulo").textContent = `Tabela · ${NIVEIS[E.nivel]} · ${CMP() ? "2026 × 2022" : rotAno(ANO())} (${int(E.unidades.length)})`;
+  const viraram = E.unidades.filter(u => u.virou).length, y = ANO(), nL = E.unidades.filter(u => familia(u["venc" + y]) === "lula").length;
+  $("#tabNota").innerHTML = E.nivel === "mg" ? "Escolha um recorte em <b>Ver por</b> para listar cidades, zonas ou regiões." : CMP() ? `<b>${int(viraram)} de ${int(E.unidades.length)}</b> mudaram de lado entre o ${E.turno === "1" ? "1º" : "2º"} turno de 2022 e 2026.` : `Em ${rotAno(y)}: <b>${nomeBol(y)}</b> venceu em ${int(E.unidades.length - nL)} e <b>Lula</b> em ${int(nL)}.`;
 }
 $("#tabela").addEventListener("click", e => {
   const th = e.target.closest("th[data-k]");
@@ -446,14 +503,14 @@ function desenharMapa() {
 // resumo do lugar em foco, ao lado do mapa
 function painelFoco(u, cidades) {
   const filho = FILHO[E.foco.nivel], subs = filho ? agrupar(filho).filter(x => cidades.some(c => c.chave === x.mzs[0].split("-")[0])) : [];
-  const nLula = cidades.filter(c => familia(c.venc26) === "lula").length, vir = cidades.filter(c => c.virou).length;
+  const y = ANO(), nLula = cidades.filter(c => familia(c["venc" + y]) === "lula").length, vir = cidades.filter(c => c.virou).length;
   const barra = (a, b) => `<div class="duo"><i style="width:${a * 100}%;background:${COR.lula}"></i><i style="width:${b * 100}%;background:${COR.bolso}"></i></div>`;
   return `<div class="foco-cab"><span class="selo mini">${NIVEL1[E.foco.nivel]}</span><h3>${esc(u.nome)}</h3><p class="nota">${int(cidades.length)} ${cidades.length === 1 ? "cidade" : "cidades"} · ${int(u.aptos)} eleitores</p></div>
-    <div class="pop-pres"><div class="a26"><span>2026</span>${barra(u.lula26, u.bol26)}<small><b>Flávio ${pct(u.bol26)} · Lula ${pct(u.lula26)}</b></small></div><div><span>2022</span>${barra(u.lula22, u.bol22)}<small>Jair ${pct(u.bol22)} · Lula ${pct(u.lula22)}</small></div></div>
-    <div class="rg-chips"><span class="${u.dLula > 0 ? "pos" : "neg"}">Lula ${pp(u.dLula)}</span><span class="${u.dBol > 0 ? "pos" : "neg"}">Bolsonaro ${pp(u.dBol)}</span><span>${int(nLula)} de ${int(cidades.length)} com Lula</span>${vir ? `<span class="am">${int(vir)} viraram</span>` : ""}</div>
-    ${u.f26 ? `<div class="rg-top"><span>Mais votados 2026</span>${celTop(u.f26)}${celTop(u.e26)}</div>` : ""}
+    <div class="pop-pres">${CMP() ? linhaAno(u, "26", true) + linhaAno(u, "22") : linhaAno(u, y, true)}</div>
+    <div class="rg-chips">${CMP() ? `<span class="${u.dLula > 0 ? "pos" : "neg"}">Lula ${pp(u.dLula)}</span><span class="${u.dBol > 0 ? "pos" : "neg"}">Bolsonaro ${pp(u.dBol)}</span>${vir ? `<span class="am">${int(vir)} viraram</span>` : ""}` : `<span>${int(nLula)} de ${int(cidades.length)} com Lula</span><span>Abstenção ${pct(u["abst" + y])}</span>`}</div>
+    ${u["f" + y] ? `<div class="rg-top"><span>Mais votados ${y === "26" ? "2026" : "2022"}</span>${celTop(u["f" + y])}${celTop(u["e" + y])}</div>` : ""}
     ${E.deps.length ? `<div class="rg-deps">${E.deps.map((s, j) => `<span><i style="background:${s.cor}"></i>${esc(s.d.nome)} ${s.d.ano}: <b>${pct(u["dp" + j], 2)}</b> · ${posTxt(u["rk" + j] ?? 99)}</span>`).join("")}</div>` : ""}
-    <div class="foco-bts"><button class="btn prim" data-abrir="${E.foco.nivel}|${esc(E.foco.chave)}">Comparativo completo →</button></div>
+    <div class="foco-bts"><button class="btn prim" data-abrir="${E.foco.nivel}|${esc(E.foco.chave)}">Ver tudo sobre ${esc(u.nome)} →</button></div>
     ${subs.length ? `<h4 class="sub">${NIVEIS[filho]} <small>toque para dar zoom</small></h4><ol class="rank">${subs.sort((a, b) => b.aptos - a.aptos).map(x => `<li><button data-focar="${x.nivel}|${esc(x.chave)}"><span><i class="pt" style="background:${corCand(x.venc26)}"></i>${esc(x.nome.replace(/^(Microrregião|Região imediata) de /, ""))}</span><b>${int(x.aptos)}</b></button></li>`).join("")}</ol>` : ""}
     <hr class="div">`;
 }
@@ -493,16 +550,10 @@ function popover(nivel, chave, ev) {
   pop.innerHTML = `<button class="fechar" aria-label="Fechar">×</button>
     <span class="selo mini">${NIVEL1[nivel]}</span><h3>${esc(u.nome)}</h3>
     <p class="nota">${int(u.aptos)} eleitores${u.virou ? ' · <b style="color:#fab219">mudou de lado</b>' : ""}</p>
-    <div class="pop-pres">
-      <div class="a26"><span>2026</span><div class="duo"><i style="width:${u.lula26 * 100}%;background:${COR.lula}"></i><i style="width:${u.bol26 * 100}%;background:${COR.bolso}"></i></div><small><b>Flávio ${pct(u.bol26)} · Lula ${pct(u.lula26)}</b> · venceu ${esc(NOME_EXIBE(u.venc26))}</small></div>
-      <div><span>2022</span><div class="duo"><i style="width:${u.lula22 * 100}%;background:${COR.lula}"></i><i style="width:${u.bol22 * 100}%;background:${COR.bolso}"></i></div><small>Jair ${pct(u.bol22)} · Lula ${pct(u.lula22)}</small></div>
-    </div>
-    <div class="rg-chips"><span class="${u.dLula > 0 ? "pos" : "neg"}">Lula ${pp(u.dLula)}</span><span class="${u.dBol > 0 ? "pos" : "neg"}">Bolsonaro ${pp(u.dBol)}</span><span>Abstenção ${pct(u.abst26)}</span></div>
+    <div class="pop-pres">${CMP() ? linhaAno(u, "26", true) + linhaAno(u, "22") : linhaAno(u, ANO(), true)}</div>
+    <div class="rg-chips">${CMP() ? `<span class="${u.dLula > 0 ? "pos" : "neg"}">Lula ${pp(u.dLula)}</span><span class="${u.dBol > 0 ? "pos" : "neg"}">Bolsonaro ${pp(u.dBol)}</span>` : ""}<span>Abstenção ${pct(u["abst" + ANO()])}</span><span>Brancos e nulos ${pct(u["bn" + ANO()])}</span></div>
     ${E.deps.length ? `<div class="rg-deps">${E.deps.map((s, j) => `<span><i style="background:${s.cor}"></i>${esc(s.d.nome)} ${s.d.ano}: <b>${int(u["dv" + j])}</b> votos (${pct(u["dp" + j], 2)}) · ${u["rk" + j] === 1 ? "<b>1º, o mais votado</b>" : u["rk" + j] < 99 ? `<b>${u["rk" + j]}º</b>` : "abaixo do 20º"}</span>`).join("")}</div>` : ""}
-    <div class="pop-tops">
-      <div><h4>Federal 2026</h4><ol class="top">${lista("6-26")}</ol></div><div><h4>Estadual 2026</h4><ol class="top">${lista("7-26")}</ol></div>
-      <div><h4>Federal 2022</h4><ol class="top">${lista("6-22")}</ol></div><div><h4>Estadual 2022</h4><ol class="top">${lista("7-22")}</ol></div>
-    </div>
+    <div class="pop-tops">${(CMP() ? ["26", "22"] : [ANO()]).map(a => `<div><h4>Federal 20${a}</h4><ol class="top">${lista("6-" + a)}</ol></div><div><h4>Estadual 20${a}</h4><ol class="top">${lista("7-" + a)}</ol></div>`).join("")}</div>
     <button class="btn prim" data-abrir="${nivel}|${esc(chave)}">Ver tudo sobre ${esc(u.nome)} →</button>`;
   pop.hidden = false;
   const w = pop.offsetWidth, h = pop.offsetHeight;
@@ -523,8 +574,12 @@ document.addEventListener("keydown", e => { if (e.key === "Escape") fecharPop();
 /* ---------------- lugar escolhido: mapa ampliado, comparativo, mais votados */
 function tabelaSub(titulo, rot, lista, nivelSub) {
   if (lista.length < 2) return "";
-  return `<h4 class="sub">${esc(titulo)} <small>${lista.length} · clique para abrir</small></h4><div class="tab-wrap" style="max-height:420px"><table><thead><tr><th>${rot}</th><th>Eleitores</th><th>Vencedor 2026</th><th>Flávio 2026</th><th>Lula 2026</th><th>Jair 2022</th><th>Lula 2022</th><th>Δ Bolsonaro</th><th>Δ Lula</th><th>Federal + votado 26</th><th>Estadual + votado 26</th>${E.deps.map(s => `<th style="box-shadow:inset 0 -3px 0 ${s.cor}">${esc(s.d.nome)} ${s.d.ano}</th>`).join("")}</tr></thead>
-    <tbody>${lista.sort((a, b) => b.aptos - a.aptos).map(c => `<tr ${nivelSub ? `data-abrir="${nivelSub}|${esc(c.chave)}"` : ""}><td><b>${esc(c.nome)}</b></td><td>${int(c.aptos)}</td><td><span class="venc"><i style="background:${corCand(c.venc26)}"></i>${esc(NOME_EXIBE(c.venc26))}</span>${c.virou ? '<span class="virou">virou</span>' : ""}</td><td><b>${pct(c.bol26)}</b></td><td><b>${pct(c.lula26)}</b></td><td>${pct(c.bol22)}</td><td>${pct(c.lula22)}</td><td class="${c.dBol > 0 ? "pos" : "neg"}">${pp(c.dBol)}</td><td class="${c.dLula > 0 ? "pos" : "neg"}">${pp(c.dLula)}</td><td>${celTop(c.f26)}</td><td>${celTop(c.e26)}</td>${E.deps.map((s, j) => `<td>${int(c["dv" + j])} <small class="nota">${pct(c["dp" + j], 2)}</small></td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+  const y = ANO(), cab = CMP() ? "<th>Vencedor 2026</th><th>Vencedor 2022</th><th>Flávio 2026</th><th>Jair 2022</th><th>Δ Bolsonaro</th><th>Lula 2026</th><th>Lula 2022</th><th>Δ Lula</th>"
+    : `<th>Vencedor</th><th>${nomeBol(y)}</th><th>Lula</th><th>Abstenção</th><th>Federal + votado</th><th>Estadual + votado</th>`;
+  const cel = c => CMP() ? `<td><span class="venc"><i style="background:${corCand(c.venc26)}"></i>${esc(NOME_EXIBE(c.venc26))}</span>${c.virou ? '<span class="virou">virou</span>' : ""}</td><td>${esc(NOME_EXIBE(c.venc22))}</td><td>${pct(c.bol26)}</td><td>${pct(c.bol22)}</td><td class="${c.dBol > 0 ? "pos" : "neg"}">${pp(c.dBol)}</td><td>${pct(c.lula26)}</td><td>${pct(c.lula22)}</td><td class="${c.dLula > 0 ? "pos" : "neg"}">${pp(c.dLula)}</td>`
+    : `<td><span class="venc"><i style="background:${corCand(c["venc" + y])}"></i>${esc(NOME_EXIBE(c["venc" + y]))}</span></td><td><b>${pct(c["bol" + y])}</b></td><td><b>${pct(c["lula" + y])}</b></td><td>${pct(c["abst" + y])}</td><td>${celTop(c["f" + y])}</td><td>${celTop(c["e" + y])}</td>`;
+  return `<h4 class="sub">${esc(titulo)} <small>${lista.length} · clique para abrir</small></h4><div class="tab-wrap" style="max-height:420px"><table><thead><tr><th>${rot}</th><th>Eleitores</th>${cab}${E.deps.map(s => `<th style="box-shadow:inset 0 -3px 0 ${s.cor}">${esc(s.d.nome)} ${s.d.ano}</th>`).join("")}</tr></thead>
+    <tbody>${lista.sort((a, b) => b.aptos - a.aptos).map(c => `<tr ${nivelSub ? `data-abrir="${nivelSub}|${esc(c.chave)}"` : ""}><td><b>${esc(c.nome)}</b></td><td>${int(c.aptos)}</td>${cel(c)}${E.deps.map((s, j) => `<td>${int(c["dv" + j])} <small class="nota">${pct(c["dp" + j], 2)}</small></td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
 }
 async function topDeps(id, alvo, titulo) {
   const g = E.top[id]; if (!g) { alvo.innerHTML = ""; return; }
@@ -829,9 +884,26 @@ $("#filtroAno").addEventListener("click", e => { const b = e.target.closest("[da
 const BOT_NIVEL = [["mun", "Cidades"], ["zona", "Zonas"], ["me", "Macrorregiões"], ["mi", "Microrregiões"], ["ri", "Regiões intermediárias"], ["rm", "Regiões imediatas"], ["mg", "Minas"]];
 function segNivel() { $$(".nivelSeg").forEach(el => el.innerHTML = BOT_NIVEL.map(([k, n]) => `<button data-n="${k}" aria-pressed="${E.nivel === k}">${n}</button>`).join("")); }
 document.addEventListener("click", e => { const b = e.target.closest(".nivelSeg [data-n]"); if (!b) return; E.nivel = b.dataset.n; segNivel(); E.unidades = agrupar(E.nivel); if (E.foco) { E.foco = null; E.voar = true; } if (E.aba === "mapa") desenharMapa(); else tabela(); });
+function setAno(a, redesenhar = true) {
+  E.ano = a; const y = ANO();
+  $$("#anoSel [data-ano]").forEach(b => b.setAttribute("aria-selected", b.dataset.ano === a));
+  $("#turnoGrupo").hidden = a === "26" || !["pres", "lugar"].includes(E.grupo);
+  // os modos de cor acompanham o ano (Lula 2026 → Lula 2022 etc.)
+  const troca = m => /^(venc|bol|lula|abst|bn)(22|26)$/.test(m) ? (CMP() ? m : m.slice(0, -2) + y) : m;
+  E.modo = validaModo(troca(E.modo)); E.galModo = validaModo(troca(E.galModo)); E.detModo = validaModo(troca(E.detModo));
+  if (!CMP()) E.topAno = y;
+  if (!COLS().some(c => c.k === ord.k)) ord = {k: "aptos", dir: -1};
+  $("#h1Ano").textContent = a === "cmp" ? "2026 × 2022" : a === "22" ? "2022" : "2026";
+  $("#h1Comp").textContent = a === "cmp" ? "o que mudou entre as duas eleições em Minas" : `resultado em Minas Gerais${a === "22" ? " · " + rotAno("22").slice(7) : ""}`;
+  $("#geralTitulo").textContent = a === "cmp" ? "Minas Gerais: 2026 × 2022" : `Minas Gerais: resultado de ${rotAno(y)}`;
+  $("#geralSub").innerHTML = a === "cmp" ? "Os candidatos dos dois anos lado a lado e o que mudou. <b>p.p.</b> = pontos percentuais (a diferença entre dois %)." : `Todos os candidatos a Presidente em ${rotAno(y)}, com votos, %, comparecimento, brancos e nulos.`;
+  if (!redesenhar) return;
+  const aba = E.aba; recalcular(); if (E.sel) abrir(E.sel.nivel, E.sel.chave); irAba(aba, false); recarregarTops();
+}
+$("#anoSel").addEventListener("click", e => { const b = e.target.closest("[data-ano]"); if (b) setAno(b.dataset.ano); });
 $("#turno").addEventListener("click", e => {
   const b = e.target.closest("[data-t]"); if (!b) return; E.turno = b.dataset.t; $$("#turno button").forEach(x => x.setAttribute("aria-pressed", x === b));
-  const aba = E.aba; recalcular(); if (E.sel) abrir(E.sel.nivel, E.sel.chave); irAba(aba, false);
+  setAno(E.ano);
 });
 function recalcular() {
   CACHE = {};
@@ -851,7 +923,7 @@ function recalcular() {
   E.partidos = new Map([...B.cand22["1"], ...B.cand22["2"], ...B.cand26].map(c => [c[0], c[1]]));
   E.fotos22 = new Map([...B.cand22["1"], ...B.cand22["2"]].filter(c => c[3]).map(c => [c[0], c[3]]));
   E.fotos26 = new Map(B.cand26.filter(c => c[3]).map(c => [c[0], c[3]]));
-  prepararGeo(); segNivel(); preencherBuscas(); recalcular(); chips();
+  prepararGeo(); segNivel(); preencherBuscas(); setAno("26", false); recalcular(); chips();
   topDeps("mg", $("#geralTop"), "Deputados mais votados em Minas");
   const n22 = B.deputados.filter(d => d.ano === 22).length, n26 = B.deputados.length - n22;
   $("#fontesTexto").innerHTML = `<p><b>Presidente 2022:</b> TSE, dados abertos (votação por candidato e detalhe da votação por município e zona eleitoral), 1º e 2º turnos, Minas Gerais.</p>
