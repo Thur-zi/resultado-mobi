@@ -147,11 +147,15 @@ function destaques() {
   const maxB = cid.filter(c => c.aptos >= 50000).sort((a, b) => b.dBol - a.dBol)[0];
   const meL = me.slice().sort((a, b) => a.dLula - b.dLula)[0], meM = me.slice().sort((a, b) => b.dLula - a.dLula)[0];
   const abre = (u) => `data-abrir="${u.nivel}|${esc(u.chave)}"`;
+  const vF = cid.filter(c => familia(c.venc26) === "bolso"), vL = cid.filter(c => familia(c.venc26) === "lula");
+  const elF = vF.reduce((t, c) => t + c.aptos, 0), elT = cid.reduce((t, c) => t + c.aptos, 0);
   $("#destGrid").innerHTML = `
     <div class="dest forte"><span class="dl">Quem venceu em Minas em 2026</span><b>${esc(NOME_EXIBE(mg.venc26))}</b><span>${pct(mg.bol26)} contra ${pct(mg.lula26)} do Lula · diferença de ${int(Math.abs((mg.v26[FB] || 0) - (mg.v26[LULA] || 0)))} votos</span></div>
-    <div class="dest"><span class="dl">Lula em Minas · ${t22} → 2026</span><b class="${mg.dLula > 0 ? "pos" : "neg"}">${pp(mg.dLula)}</b><span>${pct(mg.lula22)} → ${pct(mg.lula26)}</span></div>
-    <div class="dest"><span class="dl">Bolsonaro · Jair (2022) → Flávio (2026)</span><b class="${mg.dBol > 0 ? "pos" : "neg"}">${pp(mg.dBol)}</b><span>${pct(mg.bol22)} → ${pct(mg.bol26)}</span></div>
-    <button class="dest" data-ir="mapa"><span class="dl">Cidades que mudaram de lado</span><b>${int(l2b + b2l)} <small>de ${int(cid.length)}</small></b><span>${int(l2b)} saíram do Lula para o Flávio · ${int(b2l)} do Bolsonaro para o Lula</span></button>
+    <div class="dest d26"><span class="dl">Resultado em Minas · 2026</span><b><span style="color:${COR.bolso}">${pct(mg.bol26)}</span> × <span style="color:${COR.lula}">${pct(mg.lula26)}</span></b><span>Flávio Bolsonaro × Lula · ${int(mg.t26)} votos válidos · abstenção ${pct(mg.abst26)}</span></div>
+    <button class="dest d26" data-ir="mapa"><span class="dl">Cidades em 2026</span><b>${int(vF.length)} <small>Flávio</small> · ${int(vL.length)} <small>Lula</small></b><span>As cidades do Flávio somam ${pct(elF / elT)} dos eleitores de Minas</span></button>
+    <div class="dest"><span class="dl">Comparado a 2022 · Lula (${t22})</span><b class="${mg.dLula > 0 ? "pos" : "neg"}">${pp(mg.dLula)}</b><span>${pct(mg.lula22)} em 2022 → ${pct(mg.lula26)} em 2026</span></div>
+    <div class="dest"><span class="dl">Comparado a 2022 · Jair → Flávio Bolsonaro</span><b class="${mg.dBol > 0 ? "pos" : "neg"}">${pp(mg.dBol)}</b><span>${pct(mg.bol22)} em 2022 → ${pct(mg.bol26)} em 2026</span></div>
+    <button class="dest" data-ir="mapa"><span class="dl">Cidades que mudaram de lado desde 2022</span><b>${int(l2b + b2l)} <small>de ${int(cid.length)}</small></b><span>${int(l2b)} saíram do Lula para o Flávio · ${int(b2l)} do Bolsonaro para o Lula</span></button>
     <button class="dest" ${abre(meL)}><span class="dl">Macrorregião onde o Lula mais caiu</span><b>${esc(meL.nome)}</b><span>${pp(meL.dLula)} · onde menos caiu: ${esc(meM.nome)} (${pp(meM.dLula)})</span></button>
     ${maxB ? `<button class="dest" ${abre(maxB)}><span class="dl">Maior avanço do Flávio sobre o Jair <small>(cidades com 50 mil+ eleitores)</small></span><b>${esc(maxB.nome)}</b><span>${pp(maxB.dBol)} · ${pct(maxB.bol22)} → ${pct(maxB.bol26)}</span></button>` : ""}`;
 }
@@ -167,20 +171,20 @@ function listaCand(v, tot, fotos, n = 12) {
 function quadro(u, alvo) {
   const t = E.turno === "1" ? "2022 · 1º turno" : "2022 · 2º turno";
   const cls = v => v > 0 ? "pos" : v < 0 ? "neg" : "";
-  alvo.innerHTML = `<div class="anos"><div class="card ano"><h4>${t}</h4>${listaCand(u.v22, u.t22, E.fotos22)}</div>
-    <div class="card ano"><h4>2026 · 1º turno</h4>${listaCand(u.v26, u.t26, E.fotos26)}</div></div>
+  alvo.innerHTML = `<div class="anos"><div class="card ano a26"><h4>2026 · 1º turno <span class="tag-ano">resultado</span></h4>${listaCand(u.v26, u.t26, E.fotos26)}</div>
+    <div class="card ano a22"><h4>${t} <span class="tag-ano cmp">comparação</span></h4>${listaCand(u.v22, u.t22, E.fotos22)}</div></div>
     <div class="delta">
-      <div class="card"><div class="l">Lula</div><div class="v ${cls(u.dLula)}">${pp(u.dLula)}</div><div class="s">${pct(u.lula22)} → ${pct(u.lula26)}<br>${int(u.v22[LULA])} → ${int(u.v26[LULA])} votos</div></div>
+      <div class="card ${u.virou ? "alerta" : ""}"><div class="l">Vencedor em 2026</div><div class="v txt">${esc(NOME_EXIBE(u.venc26))}</div><div class="s">em 2022: ${esc(NOME_EXIBE(u.venc22))}</div><div class="s">${u.virou ? "<b>mudou de lado</b>" : "manteve o lado"}</div></div>
+      <div class="card"><div class="l">Abstenção 2026</div><div class="v txt">${pct(u.abst26)}</div><div class="s">em 2022: ${pct(u.abst22)}</div></div>
+      <div class="card"><div class="l">Brancos e nulos 2026</div><div class="v txt">${pct(u.bn26)}</div><div class="s">em 2022: ${pct(u.bn22)}</div></div>
+      <div class="card"><div class="l">Votos válidos 2026</div><div class="v txt">${int(u.t26)}</div><div class="s">em 2022: ${int(u.t22)} · ${int(u.aptos)} eleitores</div></div>
+      <div class="card"><div class="l">Lula · variação</div><div class="v ${cls(u.dLula)}">${pp(u.dLula)}</div><div class="s">${pct(u.lula22)} → ${pct(u.lula26)}<br>${int(u.v22[LULA])} → ${int(u.v26[LULA])} votos</div></div>
       <div class="card"><div class="l">Jair (2022) → Flávio (2026)</div><div class="v ${cls(u.dBol)}">${pp(u.dBol)}</div><div class="s">${pct(u.bol22)} → ${pct(u.bol26)}<br>${int(u.v22[JB])} → ${int(u.v26[FB])} votos</div></div>
-      <div class="card ${u.virou ? "alerta" : ""}"><div class="l">Vencedor</div><div class="v txt">${esc(NOME_EXIBE(u.venc22))} → ${esc(NOME_EXIBE(u.venc26))}</div><div class="s">${u.virou ? "<b>mudou de lado</b>" : "manteve o lado"}</div></div>
-      <div class="card"><div class="l">Abstenção</div><div class="v txt">${pct(u.abst22)} → ${pct(u.abst26)}</div><div class="s">dos eleitores aptos</div></div>
-      <div class="card"><div class="l">Brancos e nulos</div><div class="v txt">${pct(u.bn22)} → ${pct(u.bn26)}</div><div class="s">dos votos</div></div>
-      <div class="card"><div class="l">Votos válidos</div><div class="v txt">${int(u.t22)} → ${int(u.t26)}</div><div class="s">para Presidente · ${int(u.aptos)} eleitores</div></div>
     </div>`;
 }
 
 /* ---------------- cores e legendas (compartilhadas por todos os mapas) */
-const MODOS = () => [["venc26", "Vencedor 2026"], ["venc22", "Vencedor 2022"], ["virou", "Mudou de lado"], ["dLula", "Δ Lula"], ["dBol", "Δ Bolsonaro"], ["lula26", "Lula 2026"], ["bol26", "Flávio 2026"], ["lula22", "Lula 2022"], ["bol22", "Jair 2022"], ["abst26", "Abstenção 2026"]]
+const MODOS = () => [["venc26", "Vencedor 2026"], ["bol26", "Flávio 2026"], ["lula26", "Lula 2026"], ["abst26", "Abstenção 2026"], ["venc22", "Vencedor 2022"], ["virou", "Mudou de lado"], ["dBol", "Δ Bolsonaro"], ["dLula", "Δ Lula"], ["bol22", "Jair 2022"], ["lula22", "Lula 2022"]]
   .concat(E.deps.flatMap((s, j) => [["rk" + j, `${s.d.nome} ${s.d.ano}: onde foi o mais votado`], ["dp" + j, `${s.d.nome} ${s.d.ano}: %`]])).concat(E.deps.length > 1 ? [["melhor", "Qual deputado foi melhor"]] : []);
 const mistura = (c, t) => { const a = parseInt(c.slice(1), 16), b = 0x11171d; const r = s => Math.round(((b >> s) & 255) * (1 - t) + ((a >> s) & 255) * t); return `rgb(${r(16)},${r(8)},${r(0)})`; };
 const rampa = c => [.18, .36, .56, .78, 1].map(t => mistura(c, t));
@@ -222,7 +226,7 @@ function legenda(modo, q) {
   return c.map((cor, i) => `<span><b style="background:${cor}"></b>${i === 0 ? "até " + f(q[0]) : i === 4 ? "acima de " + f(q[3]) : f(q[i - 1]) + " a " + f(q[i])}</span>`).join("") + `<span class="nota">(5 faixas com o mesmo número de lugares)</span>`;
 }
 function dica(u) {
-  return `<b>${esc(u.nome)}</b><br>2022: Lula ${pct(u.lula22)} · Jair ${pct(u.bol22)}<br>2026: Lula ${pct(u.lula26)} · Flávio ${pct(u.bol26)}<br>Δ Lula ${pp(u.dLula)} · Δ Bolsonaro ${pp(u.dBol)}${u.virou ? " · <b style='color:#fab219'>mudou de lado</b>" : ""}`
+  return `<b>${esc(u.nome)}</b><br><b>2026: Flávio ${pct(u.bol26)} · Lula ${pct(u.lula26)}</b><br>2022: Jair ${pct(u.bol22)} · Lula ${pct(u.lula22)}<br>Δ Lula ${pp(u.dLula)} · Δ Bolsonaro ${pp(u.dBol)}${u.virou ? " · <b style='color:#fab219'>mudou de lado</b>" : ""}`
     + (u.f26 ? `<br>Mais votados 2026: <b>${esc(u.f26[0].nome)}</b> (fed.) · <b>${esc(u.e26?.[0].nome)}</b> (est.)` : "")
     + (u.f22 ? `<br>Mais votados 2022: ${esc(u.f22[0].nome)} (fed.) · ${esc(u.e22?.[0].nome)} (est.)` : "")
     + E.deps.map((s, j) => `<br><i style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${s.cor}"></i> ${esc(s.d.nome)} ${s.d.ano}: ${int(u["dv" + j])} votos (${pct(u["dp" + j], 2)})${u["rk" + j] ? ` · <b>${u["rk" + j] === 1 ? "1º, mais votado" : u["rk" + j] < 99 ? u["rk" + j] + "º" : "abaixo do 20º"}</b>` : ""}`).join("");
@@ -273,8 +277,8 @@ function cartaoRegiao(u, modo, q, cidMap) {
     <div class="rg-cab"><div><b>${esc(u.nivel === "me" ? u.nome : u.nome.replace(/^(Microrregião|Região intermediária|Região imediata) de /, ""))}</b><small>${int(muns.length)} ${muns.length === 1 ? "cidade" : "cidades"} · ${int(u.aptos)} eleitores</small></div>${localizador(muns.map(ibgeDe))}</div>
     ${miniSvg(itens)}
     <div class="rg-venc"><span class="venc"><i style="background:${corCand(u.venc26)}"></i>${esc(NOME_EXIBE(u.venc26))}</span>${u.virou ? '<span class="virou">virou</span>' : ""}</div>
-    <div class="rg-linha"><span>2026</span>${barra(u.lula26, u.bol26, COR.lula, COR.bolso)}<small>Lula ${pct(u.lula26)} · Flávio ${pct(u.bol26)}</small></div>
-    <div class="rg-linha"><span>2022</span>${barra(u.lula22, u.bol22, COR.lula, COR.bolso)}<small>Lula ${pct(u.lula22)} · Jair ${pct(u.bol22)}</small></div>
+    <div class="rg-linha a26"><span>2026</span>${barra(u.lula26, u.bol26, COR.lula, COR.bolso)}<small><b>Flávio ${pct(u.bol26)} · Lula ${pct(u.lula26)}</b></small></div>
+    <div class="rg-linha"><span>2022</span>${barra(u.lula22, u.bol22, COR.lula, COR.bolso)}<small>Jair ${pct(u.bol22)} · Lula ${pct(u.lula22)}</small></div>
     <div class="rg-chips"><span class="${u.dLula > 0 ? "pos" : "neg"}">Lula ${pp(u.dLula)}</span><span class="${u.dBol > 0 ? "pos" : "neg"}">Bolsonaro ${pp(u.dBol)}</span><span>${int(nLula)} de ${int(muns.length)} com Lula</span>${viraram ? `<span class="am">${int(viraram)} viraram</span>` : ""}</div>
     ${u.f26 ? `<div class="rg-top"><span>Mais votados 2026</span>${celTop(u.f26)}${celTop(u.e26)}</div>` : ""}
     <div class="rg-bts"><span class="rg-ver">Ver no mapa ↗</span><button type="button" class="btn mini" data-abrir="${u.nivel}|${esc(u.chave)}">Comparativo completo →</button></div>
@@ -306,14 +310,14 @@ let ord = {k: "aptos", dir: -1}, filtroTab = "";
 const COLS = () => [
   {t: "Lugar", k: "nome", f: u => `<b>${esc(u.nome)}</b>`},
   {t: "Eleitores", k: "aptos", f: u => int(u.aptos)},
-  {t: "Lula 22", k: "lula22", f: u => pct(u.lula22)}, {t: "Lula 26", k: "lula26", f: u => pct(u.lula26)},
-  {t: "Δ Lula", k: "dLula", f: u => `<span class="${u.dLula > 0 ? "pos" : "neg"}">${pp(u.dLula)}</span>`},
-  {t: "Jair 22", k: "bol22", f: u => pct(u.bol22)}, {t: "Flávio 26", k: "bol26", f: u => pct(u.bol26)},
+  {t: "Vencedor 2026", k: "venc26", f: u => `<span class="venc"><i style="background:${corCand(u.venc26)}"></i>${esc(NOME_EXIBE(u.venc26))}</span>${u.virou ? '<span class="virou">virou</span>' : ""}`},
+  {t: "Flávio 2026", k: "bol26", f: u => `<b>${pct(u.bol26)}</b>`}, {t: "Lula 2026", k: "lula26", f: u => `<b>${pct(u.lula26)}</b>`},
+  {t: "Abstenção 2026", k: "abst26", f: u => pct(u.abst26)}, {t: "Brancos+nulos 2026", k: "bn26", f: u => pct(u.bn26)},
+  {t: "Vencedor 2022", k: "venc22", f: u => `<span class="venc"><i style="background:${corCand(u.venc22)}"></i>${esc(NOME_EXIBE(u.venc22))}</span>`},
+  {t: "Jair 2022", k: "bol22", f: u => pct(u.bol22)}, {t: "Lula 2022", k: "lula22", f: u => pct(u.lula22)},
   {t: "Δ Bolsonaro", k: "dBol", f: u => `<span class="${u.dBol > 0 ? "pos" : "neg"}">${pp(u.dBol)}</span>`},
-  {t: "Vencedor 22", k: "venc22", f: u => `<span class="venc"><i style="background:${corCand(u.venc22)}"></i>${esc(NOME_EXIBE(u.venc22))}</span>`},
-  {t: "Vencedor 26", k: "venc26", f: u => `<span class="venc"><i style="background:${corCand(u.venc26)}"></i>${esc(NOME_EXIBE(u.venc26))}</span>${u.virou ? '<span class="virou">virou</span>' : ""}`},
-  {t: "Abstenção 22", k: "abst22", f: u => pct(u.abst22)}, {t: "Abstenção 26", k: "abst26", f: u => pct(u.abst26)},
-  {t: "Brancos+nulos 26", k: "bn26", f: u => pct(u.bn26)},
+  {t: "Δ Lula", k: "dLula", f: u => `<span class="${u.dLula > 0 ? "pos" : "neg"}">${pp(u.dLula)}</span>`},
+  {t: "Abstenção 2022", k: "abst22", f: u => pct(u.abst22)},
   {t: "Federal + votado 26", k: "f26n", f: u => celTop(u.f26)}, {t: "Estadual + votado 26", k: "e26n", f: u => celTop(u.e26)},
   {t: "Federal + votado 22", k: "f22n", f: u => celTop(u.f22)}, {t: "Estadual + votado 22", k: "e22n", f: u => celTop(u.e22)},
 ].concat(E.deps.flatMap((s, j) => [{t: `${s.d.nome} ${s.d.ano}: votos`, k: "dv" + j, cor: s.cor, f: u => int(u["dv" + j])}, {t: `${s.d.nome} ${s.d.ano}: %`, k: "dp" + j, cor: s.cor, f: u => pct(u["dp" + j], 2)}]));
@@ -445,7 +449,7 @@ function painelFoco(u, cidades) {
   const nLula = cidades.filter(c => familia(c.venc26) === "lula").length, vir = cidades.filter(c => c.virou).length;
   const barra = (a, b) => `<div class="duo"><i style="width:${a * 100}%;background:${COR.lula}"></i><i style="width:${b * 100}%;background:${COR.bolso}"></i></div>`;
   return `<div class="foco-cab"><span class="selo mini">${NIVEL1[E.foco.nivel]}</span><h3>${esc(u.nome)}</h3><p class="nota">${int(cidades.length)} ${cidades.length === 1 ? "cidade" : "cidades"} · ${int(u.aptos)} eleitores</p></div>
-    <div class="pop-pres"><div><span>2022</span>${barra(u.lula22, u.bol22)}<small>Lula ${pct(u.lula22)} · Jair ${pct(u.bol22)}</small></div><div><span>2026</span>${barra(u.lula26, u.bol26)}<small>Lula ${pct(u.lula26)} · Flávio ${pct(u.bol26)}</small></div></div>
+    <div class="pop-pres"><div class="a26"><span>2026</span>${barra(u.lula26, u.bol26)}<small><b>Flávio ${pct(u.bol26)} · Lula ${pct(u.lula26)}</b></small></div><div><span>2022</span>${barra(u.lula22, u.bol22)}<small>Jair ${pct(u.bol22)} · Lula ${pct(u.lula22)}</small></div></div>
     <div class="rg-chips"><span class="${u.dLula > 0 ? "pos" : "neg"}">Lula ${pp(u.dLula)}</span><span class="${u.dBol > 0 ? "pos" : "neg"}">Bolsonaro ${pp(u.dBol)}</span><span>${int(nLula)} de ${int(cidades.length)} com Lula</span>${vir ? `<span class="am">${int(vir)} viraram</span>` : ""}</div>
     ${u.f26 ? `<div class="rg-top"><span>Mais votados 2026</span>${celTop(u.f26)}${celTop(u.e26)}</div>` : ""}
     ${E.deps.length ? `<div class="rg-deps">${E.deps.map((s, j) => `<span><i style="background:${s.cor}"></i>${esc(s.d.nome)} ${s.d.ano}: <b>${pct(u["dp" + j], 2)}</b> · ${posTxt(u["rk" + j] ?? 99)}</span>`).join("")}</div>` : ""}
@@ -490,8 +494,8 @@ function popover(nivel, chave, ev) {
     <span class="selo mini">${NIVEL1[nivel]}</span><h3>${esc(u.nome)}</h3>
     <p class="nota">${int(u.aptos)} eleitores${u.virou ? ' · <b style="color:#fab219">mudou de lado</b>' : ""}</p>
     <div class="pop-pres">
-      <div><span>2022</span><div class="duo"><i style="width:${u.lula22 * 100}%;background:${COR.lula}"></i><i style="width:${u.bol22 * 100}%;background:${COR.bolso}"></i></div><small>Lula ${pct(u.lula22)} · Jair ${pct(u.bol22)}</small></div>
-      <div><span>2026</span><div class="duo"><i style="width:${u.lula26 * 100}%;background:${COR.lula}"></i><i style="width:${u.bol26 * 100}%;background:${COR.bolso}"></i></div><small>Lula ${pct(u.lula26)} · Flávio ${pct(u.bol26)}</small></div>
+      <div class="a26"><span>2026</span><div class="duo"><i style="width:${u.lula26 * 100}%;background:${COR.lula}"></i><i style="width:${u.bol26 * 100}%;background:${COR.bolso}"></i></div><small><b>Flávio ${pct(u.bol26)} · Lula ${pct(u.lula26)}</b> · venceu ${esc(NOME_EXIBE(u.venc26))}</small></div>
+      <div><span>2022</span><div class="duo"><i style="width:${u.lula22 * 100}%;background:${COR.lula}"></i><i style="width:${u.bol22 * 100}%;background:${COR.bolso}"></i></div><small>Jair ${pct(u.bol22)} · Lula ${pct(u.lula22)}</small></div>
     </div>
     <div class="rg-chips"><span class="${u.dLula > 0 ? "pos" : "neg"}">Lula ${pp(u.dLula)}</span><span class="${u.dBol > 0 ? "pos" : "neg"}">Bolsonaro ${pp(u.dBol)}</span><span>Abstenção ${pct(u.abst26)}</span></div>
     ${E.deps.length ? `<div class="rg-deps">${E.deps.map((s, j) => `<span><i style="background:${s.cor}"></i>${esc(s.d.nome)} ${s.d.ano}: <b>${int(u["dv" + j])}</b> votos (${pct(u["dp" + j], 2)}) · ${u["rk" + j] === 1 ? "<b>1º, o mais votado</b>" : u["rk" + j] < 99 ? `<b>${u["rk" + j]}º</b>` : "abaixo do 20º"}</span>`).join("")}</div>` : ""}
@@ -519,8 +523,8 @@ document.addEventListener("keydown", e => { if (e.key === "Escape") fecharPop();
 /* ---------------- lugar escolhido: mapa ampliado, comparativo, mais votados */
 function tabelaSub(titulo, rot, lista, nivelSub) {
   if (lista.length < 2) return "";
-  return `<h4 class="sub">${esc(titulo)} <small>${lista.length} · clique para abrir</small></h4><div class="tab-wrap" style="max-height:420px"><table><thead><tr><th>${rot}</th><th>Eleitores</th><th>Lula 22</th><th>Lula 26</th><th>Δ Lula</th><th>Jair 22</th><th>Flávio 26</th><th>Δ Bolsonaro</th><th>Vencedor 26</th><th>Federal + votado 26</th><th>Estadual + votado 26</th>${E.deps.map(s => `<th style="box-shadow:inset 0 -3px 0 ${s.cor}">${esc(s.d.nome)} ${s.d.ano}</th>`).join("")}</tr></thead>
-    <tbody>${lista.sort((a, b) => b.aptos - a.aptos).map(c => `<tr ${nivelSub ? `data-abrir="${nivelSub}|${esc(c.chave)}"` : ""}><td><b>${esc(c.nome)}</b></td><td>${int(c.aptos)}</td><td>${pct(c.lula22)}</td><td>${pct(c.lula26)}</td><td class="${c.dLula > 0 ? "pos" : "neg"}">${pp(c.dLula)}</td><td>${pct(c.bol22)}</td><td>${pct(c.bol26)}</td><td class="${c.dBol > 0 ? "pos" : "neg"}">${pp(c.dBol)}</td><td><span class="venc"><i style="background:${corCand(c.venc26)}"></i>${esc(NOME_EXIBE(c.venc26))}</span>${c.virou ? '<span class="virou">virou</span>' : ""}</td><td>${celTop(c.f26)}</td><td>${celTop(c.e26)}</td>${E.deps.map((s, j) => `<td>${int(c["dv" + j])} <small class="nota">${pct(c["dp" + j], 2)}</small></td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+  return `<h4 class="sub">${esc(titulo)} <small>${lista.length} · clique para abrir</small></h4><div class="tab-wrap" style="max-height:420px"><table><thead><tr><th>${rot}</th><th>Eleitores</th><th>Vencedor 2026</th><th>Flávio 2026</th><th>Lula 2026</th><th>Jair 2022</th><th>Lula 2022</th><th>Δ Bolsonaro</th><th>Δ Lula</th><th>Federal + votado 26</th><th>Estadual + votado 26</th>${E.deps.map(s => `<th style="box-shadow:inset 0 -3px 0 ${s.cor}">${esc(s.d.nome)} ${s.d.ano}</th>`).join("")}</tr></thead>
+    <tbody>${lista.sort((a, b) => b.aptos - a.aptos).map(c => `<tr ${nivelSub ? `data-abrir="${nivelSub}|${esc(c.chave)}"` : ""}><td><b>${esc(c.nome)}</b></td><td>${int(c.aptos)}</td><td><span class="venc"><i style="background:${corCand(c.venc26)}"></i>${esc(NOME_EXIBE(c.venc26))}</span>${c.virou ? '<span class="virou">virou</span>' : ""}</td><td><b>${pct(c.bol26)}</b></td><td><b>${pct(c.lula26)}</b></td><td>${pct(c.bol22)}</td><td>${pct(c.lula22)}</td><td class="${c.dBol > 0 ? "pos" : "neg"}">${pp(c.dBol)}</td><td class="${c.dLula > 0 ? "pos" : "neg"}">${pp(c.dLula)}</td><td>${celTop(c.f26)}</td><td>${celTop(c.e26)}</td>${E.deps.map((s, j) => `<td>${int(c["dv" + j])} <small class="nota">${pct(c["dp" + j], 2)}</small></td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
 }
 async function topDeps(id, alvo, titulo) {
   const g = E.top[id]; if (!g) { alvo.innerHTML = ""; return; }

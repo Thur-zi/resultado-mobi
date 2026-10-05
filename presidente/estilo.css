@@ -381,3 +381,14 @@ hr.div{border:0;border-top:1px solid var(--border);margin:16px 0}
 @media (max-width:980px){.linha2 .barra-ctl{flex-basis:100%}.linha2 .busca.grande{flex:1 1 220px}}
 .linha2 .barra-ctl{flex-wrap:nowrap}@media (max-width:980px){.linha2 .barra-ctl{flex-wrap:wrap}}
 .linha2 .seg{flex-wrap:nowrap;white-space:nowrap;flex:0 0 auto}.linha2 .rot{white-space:nowrap}.linha2 .busca.grande{flex:0 1 260px;min-width:200px}
+
+/* 2026 em primeiro plano */
+h1 .h1-comp{display:block;font:600 clamp(16px,2.2vw,22px)/1.3 var(--sans,inherit);color:var(--muted);letter-spacing:0;margin-top:6px}
+.ano.a26{border-color:rgba(85,184,230,.55);background:linear-gradient(180deg,rgba(85,184,230,.1),transparent 160px),var(--card)}
+.ano.a22{opacity:.88}
+.ano.a22 .cand .v b{font-size:16px}
+.tag-ano{font:800 10px var(--sans,inherit);letter-spacing:.1em;padding:3px 7px;border-radius:5px;background:var(--brand);color:#0b1a24;vertical-align:3px;margin-left:6px}
+.tag-ano.cmp{background:rgba(255,255,255,.1);color:var(--muted)}
+.dest.d26{border-color:rgba(85,184,230,.35)}
+.a26 > span,.rg-linha.a26 span{color:var(--brand)!important}
+.rg-linha.a26 small b,.pop-pres .a26 small b{color:var(--fg)}
