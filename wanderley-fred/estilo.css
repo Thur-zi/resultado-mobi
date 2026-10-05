@@ -139,7 +139,8 @@ th.tw{box-shadow:inset 0 -3px 0 var(--w)}th.tf{box-shadow:inset 0 -3px 0 var(--f
 .btn.prim{background:var(--w);border-color:transparent;color:#fff}
 .insight{border-left:4px solid var(--creme);background:rgba(248,233,202,.06);border-radius:0 12px 12px 0;padding:10px 14px;margin:0 0 12px;color:var(--fg)}
 .insight b.cw,.insight b.cf{font-weight:800}
-canvas{max-width:100%}
+.card canvas{max-width:100%}
+.leaflet-container canvas{max-width:none!important}
 
 /* quadro flutuante */
 #pop{position:fixed;z-index:2500;width:min(440px,calc(100vw - 16px));max-height:calc(100vh - 16px);overflow:auto;background:#1f2a30;border:1px solid var(--borda2);border-radius:16px;padding:16px;box-shadow:0 24px 60px -16px #000;animation:sobe .18s ease both}
