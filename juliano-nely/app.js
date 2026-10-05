@@ -123,7 +123,7 @@ function duelo() {
   const mg = soma(ESC), bh = soma(ESC.filter(e => e.mun === BH));
   const lado = k => { const x = C(k); return `<div class="lado ${k}">
     <div class="topo-l"><img class="foto" src="fotos/${x.foto}" alt="Foto de ${esc(x.nome)}"><div>${x.selo ? `<img class="selo" src="marca/${x.selo}" alt="${esc(x.nome)}">` : `<div class="selo-txt"><b>${esc(x.nome)}</b></div>`}
-      <div class="cargo-l">${esc(x.cargoNome)} · ${esc(x.partido)}</div><span class="sit${x.eleito ? " ok" : ""}">${esc(x.situacao)}</span></div></div>
+      <div class="cargo-l">${esc(x.cargoNome)} · ${esc(x.partido)}</div></div></div>
     <div class="nums"><div><b>${int(x.votos)}</b><span>votos em Minas</span></div><div><b>${pct(mg[k + "p"], 2)}</b><span>dos válidos do cargo</span></div><div><b>${pct(bh[k] / mg[k], 0)}</b><span>dos votos vieram de BH</span></div></div>
   </div>`; };
   $("#duelo").innerHTML = lado("a") +
@@ -146,7 +146,7 @@ function destaques() {
     <div class="dest"><span class="dl">Belo Horizonte · ${NB}</span><b class="cb">${int(bh.b)} votos</b><span>${pct(bh.bp, 2)} dos válidos para ${CB.cargoNome.toLowerCase().replace(/^deputad[oa] /, "")} · ${pct(bh.b / mg.b, 0)} de tudo que ${ele("b")} teve</span></div>
     <div class="dest"><span class="dl">Regional mais forte em BH</span><b><span class="ca">${esc(ra.nome)}</span> · <span class="cb">${esc(rb.nome)}</span></b><span>${NA} ${pct(ra.ap, 2)} · ${NB} ${pct(rb.bp, 2)}</span></div>
     <div class="dest"><span class="dl">Cidades com voto</span><b><span class="ca">${int(soA)}</span> · <span class="cb">${int(soB)}</span></b><span>${NA} · ${NB} · os dois juntos em ${int(ambos)} cidades</span></div>
-    ${c22 ? `<div class="dest"><span class="dl">${nm(K22)} · 2022 → 2026</span><b class="${c22.votos >= c22.votos22 ? "pos" : "neg"}">${int(c22.votos22)} → ${int(c22.votos)}</b><span>${c22.votos >= c22.votos22 ? "+" : ""}${pct(c22.votos / c22.votos22 - 1)} · em 2022 pelo ${esc(c22.partido22)} (${esc(c22.situacao22.toLowerCase())})</span></div>` : ""}
+    ${c22 ? `<div class="dest"><span class="dl">${nm(K22)} · 2022 → 2026</span><b class="${c22.votos >= c22.votos22 ? "pos" : "neg"}">${int(c22.votos22)} → ${int(c22.votos)}</b><span>${c22.votos >= c22.votos22 ? "+" : ""}${pct(c22.votos / c22.votos22 - 1)} · em 2022 pelo ${esc(c22.partido22)}</span></div>` : ""}
     <div class="dest"><span class="dl">Peso no partido (${esc(PART)})</span><b><span class="ca">${pct(mg.apt, 0)}</span> · <span class="cb">${pct(mg.bpt, 0)}</span></b><span>dos votos do ${esc(PART)} para estadual · para federal, em Minas</span></div>`;
   animar($("#destaques"));
 }
