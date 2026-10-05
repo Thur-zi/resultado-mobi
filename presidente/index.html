@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Presidente 2022 × 2026 · Minas Gerais · MOBI</title>
+<meta name="description" content="Quadro comparativo da votação para Presidente em Minas Gerais, 2022 × 2026, por macrorregiões, regiões, zonas eleitorais e cidades, cruzado com os deputados federais e estaduais de 2022 e 2026. Dados oficiais do TSE.">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#090d11">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="MOBI · Mobilização Inteligente">
+<meta property="og:title" content="Presidente 2022 × 2026 · Minas Gerais">
+<meta property="og:description" content="Como Minas votou para Presidente em 2022 e 2026, cidade por cidade, zona por zona e região por região, cruzado com os deputados federais e estaduais. Dados oficiais do TSE.">
+<meta property="og:image" content="https://resultado.mobinteligente.com.br/presidente/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:url" content="https://resultado.mobinteligente.com.br/presidente/">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://resultado.mobinteligente.com.br/presidente/og.png">
+<link rel="icon" type="image/png" href="marca/mobi-simbolo-64.png">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="base.css">
+<link rel="stylesheet" href="estilo.css">
+</head>
+<body>
+<div class="fundo" aria-hidden="true"></div>
+<div class="wrap">
+  <header class="topo">
+    <a href="/" aria-label="Resultados MOBI"><img src="marca/mobi-logo-light.png" alt="MOBI — Mobilização Inteligente"></a>
+    <span class="tag"><span class="pulso parado"></span><span>Dados oficiais do TSE</span></span>
+  </header>
+  <div class="kicker">Quadro comparativo · Minas Gerais</div>
+  <h1>Presidente <span class="azul">2022 × 2026</span></h1>
+  <p class="lead">Como Minas votou para Presidente em 2022 e em 2026: no estado, nas macrorregiões, nas regiões, nas zonas eleitorais e em cada cidade. E como os deputados federais e estaduais dos dois anos se saíram nesses mesmos lugares.</p>
+
+  <section id="destaques" aria-label="Destaques"><div class="dest-grid" id="destGrid"><div class="carregando">Carregando os dados oficiais…</div></div></section>
+
+  <ol class="passos">
+    <li><b>1</b><div><strong>Escolha o recorte</strong><span>Minas, macrorregiões, regiões, zonas eleitorais ou cidades</span></div></li>
+    <li><b>2</b><div><strong>Busque um lugar</strong><span>Abre o comparativo completo, com os deputados mais votados ali</span></div></li>
+    <li><b>3</b><div><strong>Compare deputados</strong><span>Até 4, de 2022 ou 2026, entre si e com o voto para Presidente</span></div></li>
+  </ol>
+
+  <div class="controles" id="controles">
+    <div class="grupo"><span class="rot">Ver por</span>
+      <div class="seg" id="nivel" role="group" aria-label="Ver por">
+        <button data-n="mg" aria-pressed="true">Minas</button><button data-n="me">Macrorregiões</button><button data-n="mi">Microrregiões</button><button data-n="ri">Regiões intermediárias</button><button data-n="rm">Regiões imediatas</button><button data-n="zona">Zonas</button><button data-n="mun">Cidades</button>
+      </div></div>
+    <div class="grupo"><span class="rot">2026 contra</span>
+      <div class="seg" id="turno" role="group" aria-label="Comparar 2026 com">
+        <button data-t="1" aria-pressed="true">2022 · 1º turno</button><button data-t="2">2022 · 2º turno</button>
+      </div></div>
+    <label class="busca grande"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="qUnidade" list="lUnidades" placeholder="Buscar cidade, zona ou região…" autocomplete="off" aria-label="Buscar cidade, zona ou região"><datalist id="lUnidades"></datalist></label>
+    <nav class="secoes" aria-label="Seções"><a href="#geral">Quadro</a><a href="#mapaSec">Mapa</a><a href="#tabelaSec">Tabela</a><a href="#depSec">Deputados <span id="nDeps" class="bolinha" hidden></span></a></nav>
+  </div>
+
+  <section id="geral">
+    <div class="sec-cab"><h2 id="geralTitulo">Minas Gerais: 2022 × 2026</h2><p>Todos os candidatos a Presidente nos dois anos e o que mudou. <b>p.p.</b> = pontos percentuais (a diferença entre dois %).</p></div>
+    <div id="quadro"></div><div id="geralTop"></div>
+  </section>
+  <section id="detalhe" hidden>
+    <div class="sec-cab"><span class="selo">Lugar escolhido</span><h2 id="detTitulo"></h2><button class="btn" id="fecharDet">Fechar ×</button></div>
+    <div id="detCorpo"></div>
+  </section>
+  <section id="mapaSec">
+    <div class="sec-cab"><h2 id="mapaTitulo">Mapa</h2><p>Passe o mouse ou toque para ver os números. Clique para abrir o comparativo do lugar.</p></div>
+    <div class="seg rolar" id="modoMapa" role="group" aria-label="O que mostrar no mapa"></div>
+    <div class="mapa" id="mapa"></div><div class="legenda" id="legenda"></div>
+  </section>
+  <section id="tabelaSec">
+    <div class="sec-cab"><h2 id="tabTitulo">Tabela</h2><p id="tabNota"></p></div>
+    <div class="ferr"><label class="busca"><input id="qTab" type="search" placeholder="Filtrar a tabela" aria-label="Filtrar a tabela"></label><button class="btn" id="csv">Baixar CSV</button><span class="nota">Clique no título de uma coluna para ordenar.</span></div>
+    <div class="tab-wrap" id="tabela"></div>
+  </section>
+  <section id="depSec">
+    <div class="sec-cab"><h2>Deputados federais e estaduais · 2022 e 2026</h2><p>Escolha até <b>4 deputados</b>, de qualquer ano e cargo. Eles aparecem lado a lado, entram no mapa e na tabela e são cruzados com o voto para Presidente.</p></div>
+    <div class="dep-busca card">
+      <label class="busca grande"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>
+        <input id="qDep" list="lDeps" placeholder="Digite o nome de um deputado…" autocomplete="off" aria-label="Escolher deputado"><datalist id="lDeps"></datalist></label>
+      <div class="seg" id="filtroCargo" role="group" aria-label="Cargo"><button data-c="0" aria-pressed="true">Todos</button><button data-c="6">Federais</button><button data-c="7">Estaduais</button></div>
+      <div class="seg" id="filtroAno" role="group" aria-label="Ano"><button data-a="0" aria-pressed="true">2022 e 2026</button><button data-a="26">2026</button><button data-a="22">2022</button></div>
+      <div id="chips" class="chips"></div>
+    </div>
+    <div id="depCorpo"></div>
+  </section>
+  <section id="fontes"><div class="sec-cab"><h2>Fontes e método</h2></div><div class="metodo" id="fontesTexto"></div></section>
+  <footer>FONTE: TSE · RESULTADOS OFICIAIS 2022 (DADOS ABERTOS) E BOLETINS DE URNA 2026 · MOBI — MOBILIZAÇÃO INTELIGENTE</footer>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
