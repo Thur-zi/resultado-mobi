@@ -52,6 +52,40 @@ const S = {
 const chave = c => `${c.cargo}-${c.numero}`;
 const corDe = s => s.cor < CORES.length ? CORES[s.cor] : COR_OUTRO;
 
+/* ------------------------------------------------------------------ fotos, partidos e bandeiras */
+// Foto oficial do TSE (link direto ao CDN do TSE, pelo sqcand). Sem sqcand ou se a foto falhar: iniciais.
+const FOTO_TSE = "https://resultados.tse.jus.br/oficial/ele2026";
+const ufPainel = () => S.status?.uf || CLIENTE.uf || "mg";
+const fotoUrl = c => c?.sqcand ? `${FOTO_TSE}/${c.cargo === 1 ? 6257 : 6259}/fotos/${c.cargo === 1 ? "br" : ufPainel()}/${c.sqcand}.jpeg` : null;
+const iniciais = n => { const p = String(n || "").split(/\s+/).filter(x => x && !/^(de|da|do|das|dos|e)$/i.test(x)); return ((p[0]?.[0] || "") + (p.length > 1 ? p[p.length - 1][0] : "")).toUpperCase(); };
+// c: candidato (de S.cands) ou só {cargo, numero}; aceita também itens com nomeUrna/nome de outras listas
+function avatar(c, {tam = 32, cor = "", cls = ""} = {}) {
+  const x = c && !c.sqcand && c.cargo && c.numero != null ? S.idx.get(chave(c)) || c : c;
+  const nomeC = titulo(x?.nomeUrna || x?.nome || "");
+  const u = fotoUrl(x);
+  return `<span class="av ${cls}" style="--av:${tam}px${cor ? `;--av-c:${cor}` : ""}"><span class="ini" aria-hidden="true">${esc(iniciais(nomeC))}</span>${u
+    ? `<img src="${esc(u)}" alt="Foto de ${esc(nomeC)}" width="${tam}" height="${tam}" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}</span>`;
+}
+// Logos oficiais (Wikimedia Commons) em /partidos/<SIGLA>.<ext>; sem logo: círculo colorido com a sigla
+const LOGOS_PARTIDOS = {AGIR: "svg", AVANTE: "svg", CIDADANIA: "svg", DC: "svg", DEMOCRATA: "png", MDB: "svg", MISSAO: "svg", MOBILIZA: "png", NOVO: "svg", PCB: "svg", PCDOB: "svg", PCO: "svg", PDT: "png", PL: "svg", PMB: "png", PODE: "svg", PP: "svg", PRD: "svg", PRTB: "png", PSB: "svg", PSD: "svg", PSDB: "svg", PSOL: "svg", PSTU: "png", PT: "svg", PV: "svg", REDE: "svg", REPUBLICANOS: "svg", SOLIDARIEDADE: "svg", UNIAO: "svg", UP: "svg"};
+const siglaNorm = s => norm(s).toUpperCase().replace(/[^A-Z0-9]/g, "");
+const PALETA_PARTIDO = ["#3d6fb6", "#b5473a", "#7a5bb8", "#2f8a64", "#b0832a", "#3a8f9c", "#a64d7c", "#5b7a2e"];
+const corPartido = k => PALETA_PARTIDO[[...k].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7) % PALETA_PARTIDO.length];
+function logoPartido(sigla, tam = 20) {
+  const k = siglaNorm(sigla), ext = LOGOS_PARTIDOS[k];
+  const rot = esc(k.length > 4 ? k.slice(0, 3) : k);
+  return `<span class="lp${ext ? "" : " sem"}" style="--lp:${tam}px;--lp-c:${corPartido(k)}" title="${esc(sigla)}"><span class="sg" aria-hidden="true">${rot}</span>${ext
+    ? `<img src="/partidos/${k}.${ext}" alt="" width="${tam}" height="${tam}" loading="lazy" decoding="async" onerror="this.parentNode.classList.add('sem');this.remove()">` : ""}</span>`;
+}
+// Sigla com logo(s): federação ("PT / PCdoB / PV") mostra os logos lado a lado
+function partidoHTML(sigla, {tam = 18, texto = true} = {}) {
+  if (!sigla) return "";
+  const partes = String(sigla).split(/\s*\/\s*/).filter(Boolean);
+  return `<span class="partido"><span class="logos">${partes.map(p => logoPartido(p, tam)).join("")}</span>${texto ? `<span class="sg-txt">${esc(sigla)}</span>` : `<span class="sr">${esc(sigla)}</span>`}</span>`;
+}
+// Bandeiras dos estados (Wikimedia Commons, domínio público): PNG pequeno em /bandeiras/<uf>.png (o SVG original fica ao lado)
+const bandeira = (uf, {w = 22, cls = "", lazy = true} = {}) => UFS[uf] ? `<img class="bandeira ${cls}" src="/bandeiras/${uf}.png" alt="Bandeira: ${esc(UFS[uf])}" width="${w}" height="${Math.round(w * 0.7)}"${lazy ? ` loading="lazy"` : ""} decoding="async" onerror="this.remove()">` : "";
+
 function salvarSel() { lsSet("apu.sel.v2", JSON.stringify({sel: S.sel, ativo: S.ativo})); lsSet("apu.cmp", JSON.stringify(S.cmp)); }
 function carregarSel(padrao) {
   try { S.cmp = JSON.parse(lsGet("apu.cmp")) || []; } catch { S.cmp = []; }
@@ -120,10 +154,9 @@ function renderChips() {
   $("#chips").innerHTML = S.sel.map(s => {
     const c = S.idx.get(chave(s));
     const nome = c ? titulo(c.nomeUrna) : "Candidato";
-    const sub = `${NOME_CARGO[s.cargo] || ""}${c?.partido ? " · " + c.partido : ""}`;
-    return `<div class="chip" role="button" tabindex="0" aria-pressed="${chave(s) === S.ativo}" data-k="${chave(s)}">
-      <span class="bola" style="background:${corDe(s)}"></span>
-      <span class="txt"><b>${esc(nome)}</b><small>${esc(sub)}</small></span>
+    return `<div class="chip" role="button" tabindex="0" aria-pressed="${chave(s) === S.ativo}" data-k="${chave(s)}" style="--c:${corDe(s)}">
+      ${avatar(c || s, {tam: 28, cor: corDe(s)})}
+      <span class="txt"><b>${esc(nome)}</b><small>${esc(NOME_CARGO[s.cargo] || "")}${c?.partido ? ` · ${partidoHTML(c.partido, {tam: 13})}` : ""}</small></span>
       <button class="x" data-rm="${chave(s)}" aria-label="Remover ${esc(nome)}" title="Remover"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
     </div>`;
   }).join("") || `<span class="nota">Adicione um candidato para começar →</span>`;
@@ -137,6 +170,8 @@ $("#chips").addEventListener("click", e => {
 $("#chips").addEventListener("keydown", e => { if (e.key === "Enter" && e.target.classList.contains("chip")) e.target.click(); });
 
 const addPop = $("#addPop"), addInput = $("#addInput");
+// rodapé do popup (contagem + Pronto); criado aqui para valer também nas páginas já geradas
+if (!$("#addPe")) addPop.insertAdjacentHTML("beforeend", `<div class="add-pe" id="addPe"><span class="nota" id="addConta" aria-live="polite"></span><button class="btn" id="addPronto" type="button">Pronto</button></div>`);
 $("#addBtn").addEventListener("click", e => {
   e.stopPropagation();
   const abrir = !addPop.classList.contains("aberto");
@@ -147,7 +182,8 @@ $("#addBtn").addEventListener("click", e => {
 document.addEventListener("click", e => { if (!e.target.closest(".add-wrap")) addPop.classList.remove("aberto"); });
 addInput.addEventListener("input", renderAdd);
 addInput.addEventListener("keydown", e => {
-  if (e.key === "Enter") { const b = $("#addRes button"); if (b) b.click(); }
+  // Enter marca/desmarca o primeiro da lista (o popup fica aberto para escolher vários)
+  if (e.key === "Enter") { const b = $("#addRes input[type=checkbox]"); if (b) { b.checked = !b.checked; b.dispatchEvent(new Event("change", {bubbles: true})); } }
   if (e.key === "Escape") addPop.classList.remove("aberto");
 });
 $("#addCargos").addEventListener("click", e => {
@@ -162,18 +198,29 @@ function renderAdd() {
   let lista = S.cands.filter(c => !S.addCargo || c.cargo === S.addCargo);
   if (q) lista = lista.filter(c => String(c.numero).startsWith(q) || norm(c.nomeUrna).includes(q) || norm(c.nome).includes(q) || norm(c.partido) === q);
   lista = lista.slice().sort((a, b) => (String(a.numero) === q ? -1 : 0) - (String(b.numero) === q ? -1 : 0) || b.votos - a.votos || a.nomeUrna.localeCompare(b.nomeUrna));
-  const sel = new Set(S.sel.map(chave));
-  $("#addRes").innerHTML = lista.slice(0, 40).map(c => `<button data-k="${chave(c)}" ${sel.has(chave(c)) ? 'class="ativo"' : ""}>
-      <span><b>${esc(titulo(c.nomeUrna))}</b> <span class="nota">${esc(c.partido)}</span></span>
-      <small>${esc(NOME_CARGO[c.cargo] || "")}${c.votos ? " · " + int(c.votos) : ""}</small></button>`).join("")
+  const sel = new Map(S.sel.map(s => [chave(s), s]));
+  $("#addRes").innerHTML = lista.slice(0, 40).map(c => {
+    const k = chave(c), s = sel.get(k), nomeC = titulo(c.nomeUrna);
+    return `<label class="add-item${s ? " ativo" : ""}" data-k="${k}">
+      <input type="checkbox" data-k="${k}" ${s ? "checked" : ""} aria-label="Acompanhar ${esc(nomeC)} (${esc(NOME_CARGO[c.cargo] || "")})">
+      ${avatar(c, {tam: 36, cor: s ? corDe(s) : ""})}
+      <span class="add-txt"><b>${esc(nomeC)}</b><small>${partidoHTML(c.partido, {tam: 14})}<span class="sep-p">·</span>${esc(NOME_CARGO[c.cargo] || "")}</small></span>
+      <small class="add-v">${c.votos ? int(c.votos) + " votos" : ""}</small></label>`;
+  }).join("")
     || `<div class="vazio">${S.cands.length ? "Nenhum candidato encontrado" : "Carregando lista de candidatos do TSE…"}</div>`;
+  $("#addConta").textContent = S.sel.length ? `${S.sel.length} selecionado${S.sel.length > 1 ? "s" : ""}` : "Nenhum selecionado";
 }
-$("#addRes").addEventListener("click", e => {
-  const b = e.target.closest("button[data-k]"); if (!b) return;
-  const [cargo, numero] = b.dataset.k.split("-").map(Number);
-  addPop.classList.remove("aberto"); addInput.value = "";
-  adicionar({cargo, numero});
+// Quadrinho de cada candidato: marcar acompanha, desmarcar remove; o popup continua aberto
+$("#addRes").addEventListener("change", e => {
+  const b = e.target.closest("input[type=checkbox][data-k]"); if (!b) return;
+  const k = b.dataset.k, [cargo, numero] = k.split("-").map(Number);
+  if (b.checked) adicionar({cargo, numero}); else remover(k);
+  const item = b.closest(".add-item"), s = S.sel.find(x => chave(x) === k);
+  item.classList.toggle("ativo", !!s);
+  item.querySelector(".av")?.style.setProperty("--av-c", s ? corDe(s) : "");
+  $("#addConta").textContent = S.sel.length ? `${S.sel.length} selecionado${S.sel.length > 1 ? "s" : ""}` : "Nenhum selecionado";
 });
+$("#addPronto").addEventListener("click", () => { addPop.classList.remove("aberto"); $("#addBtn").setAttribute("aria-expanded", "false"); $("#addBtn").focus(); });
 
 /* ------------------------------------------------------------------ abas */
 const ABAS = [
@@ -212,7 +259,7 @@ S.ativoSel = () => S.sel.find(s => chave(s) === S.ativo);
 function barras(itens, {max, onclick} = {}) {
   const m = max ?? Math.max(1, ...itens.flatMap(i => i.valores.map(v => v.v)));
   return `<div class="barras">${itens.map((it, i) => `<div class="barra-l ${onclick ? "clicavel" : ""} ${it.eu ? "eu" : ""}" ${onclick ? `data-i="${i}"` : ""} ${it.tip ? `data-tip="${it.tip}"` : ""}>
-    <span class="rot" title="${esc(it.rot)}">${esc(it.rot)}${it.sub ? `<small>${esc(it.sub)}</small>` : ""}</span>
+    <span class="rot${it.ico ? " com-ico" : ""}" title="${esc(it.rot)}">${it.ico ? `${it.ico}<span class="t">${esc(it.rot)}${it.sub ? `<small>${esc(it.sub)}</small>` : ""}</span>` : `${esc(it.rot)}${it.sub ? `<small>${esc(it.sub)}</small>` : ""}`}</span>
     <span class="trilhos">${it.valores.map(v => `<span class="trilho"><i style="width:${Math.max(0.3, v.v / m * 100)}%;background:${v.cor}"></i></span>`).join("")}</span>
     <span class="v">${it.valores.map(v => v.txt ?? int(v.v)).join(" · ")}${it.extra ? `<small>${esc(it.extra)}</small>` : ""}</span>
   </div>`).join("")}</div>`;
@@ -221,10 +268,11 @@ function barras(itens, {max, onclick} = {}) {
 function cabecalho(c, s) {
   if (!c) return `<div class="cabeca"><div><span class="kicker">Candidato</span><h1>Candidato</h1><p>Não encontrado na lista oficial do TSE para este cargo.</p></div></div>`;
   const sit = c.situacao ? `<span class="tag ${c.eleito ? "" : "cinza"}">${esc(c.situacao)}</span>` : "";
-  return `<div class="cabeca"><div>
-      <span class="kicker">${esc(c.cargoNome)} · ${esc(c.partido)}</span>
+  return `<div class="cabeca"><div class="cabeca-cand">
+      ${avatar(c, {tam: 76, cor: corDe(s), cls: "av-grande"})}
+      <div><span class="kicker">${esc(c.cargoNome)} · ${esc(c.partido)}</span>
       <h1><span class="texto-marca">${esc(titulo(c.nomeUrna))}</span></h1>
-      <p>${esc(titulo(c.nome))}${c.agremiacao ? ` · ${esc(titulo(c.agremiacao))}` : ""} ${sit}</p>
+      <p>${partidoHTML(c.partido, {tam: 20, texto: false})} ${esc(titulo(c.nome))}${c.agremiacao ? ` · ${esc(titulo(c.agremiacao))}` : ""} ${sit}</p></div>
     </div></div>`;
 }
 
@@ -266,6 +314,7 @@ function viewGeral(s, c, d) {
   if (rk.pos) {
     const i = rk.pos - 1, ini = Math.max(0, i - 4), fim = Math.min(rk.lista.length, i + 5);
     const linhas = rk.lista.slice(ini, fim).map(x => ({rot: `${x.posicao}º ${titulo(x.nomeUrna)}`, sub: x.partido, eu: x.numero === c.numero,
+      ico: avatar(x, {tam: 26, cor: x.numero === c.numero ? corDe(s) : ""}) + logoPartido(x.partido, 16),
       valores: [{v: x.votos, cor: x.numero === c.numero ? corDe(s) : COR_OUTRO}], extra: pct(x.pct / 100, 2)}));
     rkHtml = barras(linhas, {max: rk.lista[ini].votos});
     if (rk.vagas && [6, 7, 8, 13].includes(c.cargo)) rkHtml += `<p class="nota" style="margin-top:12px">${rk.vagas} vagas em disputa. A eleição de deputado é proporcional: quem entra depende também do quociente partidário da federação/partido, não só da posição.</p>`;
@@ -391,8 +440,8 @@ function tabela({cols, linhas, est, porPag = 50, onRow}) {
   const pags = Math.max(1, Math.ceil(ordenadas.length / porPag));
   est.pag = Math.min(est.pag, pags - 1);
   const vis = ordenadas.slice(est.pag * porPag, (est.pag + 1) * porPag);
-  const html = `<div class="tbl-wrap"><table><thead><tr>${cols.map(c => `<th class="ord ${c.n ? "n" : ""}" data-k="${c.k}">${esc(c.t)}<span class="seta">${est.ord === c.k ? (est.dir < 0 ? "↓" : "↑") : ""}</span></th>`).join("")}</tr></thead>
-    <tbody>${vis.map((l, i) => `<tr class="${onRow ? "clicavel" : ""}" data-i="${est.pag * porPag + i}">${cols.map(c => `<td class="${c.n ? "n" : ""} ${c.cls || ""}">${c.f ? c.f(l) : esc(l[c.k])}</td>`).join("")}</tr>`).join("")
+  const html = `<div class="tbl-wrap"><table><thead><tr>${cols.map(c => `<th class="ord ${c.n ? "n" : ""}" data-k="${c.k}"${c.thAttr ? " " + c.thAttr : ""}>${c.th ?? esc(c.t)}<span class="seta">${est.ord === c.k ? (est.dir < 0 ? "↓" : "↑") : ""}</span></th>`).join("")}</tr></thead>
+    <tbody>${vis.map((l, i) => `<tr class="${onRow ? "clicavel" : ""}" data-i="${est.pag * porPag + i}">${cols.map(c => `<td class="${c.n ? "n" : ""} ${c.cls || ""}"${c.attr ? " " + c.attr(l) : ""}>${c.f ? c.f(l) : esc(l[c.k])}</td>`).join("")}</tr>`).join("")
       || `<tr><td colspan="${cols.length}"><div class="vazio-estado"><b>Nada por aqui ainda</b>Os dados aparecem conforme os boletins de urna são publicados.</div></td></tr>`}</tbody></table></div>
     <div class="paginacao"><span>${int(ordenadas.length)} linhas · página ${est.pag + 1} de ${pags}</span>
       <button data-p="-1" ${est.pag === 0 ? "disabled" : ""} aria-label="Anterior">‹</button><button data-p="1" ${est.pag >= pags - 1 ? "disabled" : ""} aria-label="Próxima">›</button></div>`;
@@ -470,19 +519,19 @@ function viewEscolas(s, c, d) {
 }
 
 /* ------------------------------------------------------------------ Comparar */
+const nomeCmp = x => titulo(S.idx.get(chave(x))?.nomeUrna || "Candidato");
 function seletorComparacao() {
-  const nomeDe = x => titulo(S.idx.get(chave(x))?.nomeUrna || "Candidato");
   const fora = S.sel.filter(x => !S.cmp.some(y => chave(y) === chave(x)));
   return `<section class="card vidro"><h2>Quem comparar</h2>
     <p class="desc">Escolha de 2 a 4 candidatos, de qualquer cargo. Nada vem pré-selecionado; a escolha fica salva neste navegador.</p>
     <div class="filtros" id="cmpSel">
-      ${S.cmp.map(x => `<span class="chip" aria-pressed="true"><span class="bola" style="background:${corDe(x)}"></span>
-        <span class="txt"><b>${esc(nomeDe(x))}</b><small>${esc(NOME_CARGO[x.cargo] || "")}</small></span>
-        <button class="x" data-cmp-rm="${chave(x)}" aria-label="Tirar da comparação"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18 6 6 18M6 6l12 12"/></svg></button></span>`).join("")}
-      ${S.cmp.length < 4 ? fora.map(x => `<button class="btn" data-cmp-add="${chave(x)}">+ ${esc(nomeDe(x))}</button>`).join("") : ""}
+      ${S.cmp.map(x => { const c = S.idx.get(chave(x)); return `<span class="chip" aria-pressed="true" style="--c:${corDe(x)}">${avatar(c || x, {tam: 28, cor: corDe(x)})}
+        <span class="txt"><b>${esc(nomeCmp(x))}</b><small>${esc(NOME_CARGO[x.cargo] || "")}${c?.partido ? ` · ${partidoHTML(c.partido, {tam: 13})}` : ""}</small></span>
+        <button class="x" data-cmp-rm="${chave(x)}" aria-label="Tirar ${esc(nomeCmp(x))} da comparação"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18 6 6 18M6 6l12 12"/></svg></button></span>`; }).join("")}
+      ${S.cmp.length < 4 ? fora.map(x => `<button class="btn btn-cand" data-cmp-add="${chave(x)}">${avatar(S.idx.get(chave(x)) || x, {tam: 22})}+ ${esc(nomeCmp(x))}</button>`).join("") : ""}
     </div>
-    ${S.cmp.length < 4 ? `<div class="busca-global" style="margin:0;width:min(420px,100%)"><div class="campo">${ICONE_BUSCA}
-      <input id="cmpBusca" type="search" placeholder="Buscar outro candidato pelo nome" autocomplete="off"></div>
+    ${S.cmp.length < 4 ? `<div class="busca-global" style="margin:0;width:min(460px,100%)"><div class="campo">${ICONE_BUSCA}
+      <input id="cmpBusca" type="search" placeholder="Buscar outro candidato pelo nome" autocomplete="off" aria-label="Buscar candidato para comparar"></div>
       <div class="resultados" id="cmpRes" role="listbox"></div></div>` : ""}
     ${S.cmp.length ? `<p style="margin:12px 0 0"><button class="btn" id="cmpLimpar">Limpar comparação</button></p>` : ""}
   </section>`;
@@ -501,12 +550,14 @@ function ligarSeletorComparacao() {
   inp.addEventListener("input", () => {
     const q = norm(inp.value.trim());
     if (!q) { res.classList.remove("aberto"); return; }
-    const lista = S.cands.filter(c => String(c.numero).startsWith(q) || norm(c.nomeUrna).includes(q) || norm(c.nome).includes(q))
+    const ja = new Set(S.cmp.map(chave));
+    const lista = S.cands.filter(c => !ja.has(chave(c)) && (String(c.numero).startsWith(q) || norm(c.nomeUrna).includes(q) || norm(c.nome).includes(q)))
       .sort((a, b) => b.votos - a.votos).slice(0, 30);
-    res.innerHTML = lista.map(c => `<button data-k="${chave(c)}"><span><b>${esc(titulo(c.nomeUrna))}</b> <span class="nota">${esc(c.partido)}</span></span><small>${esc(NOME_CARGO[c.cargo] || "")}</small></button>`).join("")
+    res.innerHTML = lista.map(c => `<button data-k="${chave(c)}" class="res-cand">${avatar(c, {tam: 32})}<span class="add-txt"><b>${esc(titulo(c.nomeUrna))}</b><small>${partidoHTML(c.partido, {tam: 14})}<span class="sep-p">·</span>${esc(NOME_CARGO[c.cargo] || "")}</small></span><small>${c.votos ? int(c.votos) + " votos" : ""}</small></button>`).join("")
       || `<div class="vazio">Nenhum candidato encontrado</div>`;
     res.classList.add("aberto");
   });
+  inp.addEventListener("keydown", e => { if (e.key === "Enter") res.querySelector("button[data-k]")?.click(); if (e.key === "Escape") res.classList.remove("aberto"); });
   res.addEventListener("click", e => {
     const b = e.target.closest("button[data-k]"); if (!b) return;
     const [cargo, numero] = b.dataset.k.split("-").map(Number);
@@ -526,26 +577,28 @@ function viewComparar() {
   const itens = S.cmp.map(s => ({s, c: S.idx.get(chave(s)), d: S.dados.get(chave(s))})).filter(x => x.d);
   if (S.cmp.length < 2) return;
   if (itens.length < S.cmp.length) { $("#conteudo").insertAdjacentHTML("beforeend", vazio("Carregando…", "Buscando os dados dos candidatos escolhidos.")); return; }
-  let h = `<div class="cabeca"><div><span class="kicker">Comparação</span><h1>${itens.map(x => esc(titulo(x.c?.nomeUrna || "Candidato"))).join(" × ")}</h1>
-    <p>Mesmo território, cargos ${[...new Set(itens.map(x => NOME_CARGO[x.s.cargo]))].join(" e ")}.</p></div></div><div class="cmp-grid">`;
+  let h = `<div class="cabeca"><div class="cabeca-cand"><span class="avs">${itens.map(x => avatar(x.c || x.s, {tam: 58, cor: corDe(x.s), cls: "av-grande"})).join("")}</span>
+    <div><span class="kicker">Comparação</span><h1>${itens.map(x => esc(titulo(x.c?.nomeUrna || "Candidato"))).join(" × ")}</h1>
+    <p>Mesmo território, cargos ${[...new Set(itens.map(x => NOME_CARGO[x.s.cargo]))].join(" e ")}.</p></div></div></div><div class="cmp-grid">`;
   for (const {s, c, d} of itens) {
     const muns = d.municipios.filter(m => m.votos > 0).sort((a, b) => b.votos - a.votos);
-    h += `<section class="vidro cmp-card" style="--c:${corDe(s)}"><h3>${esc(titulo(c?.nomeUrna || "Candidato"))}</h3><div class="sub">${esc(NOME_CARGO[s.cargo])} · ${esc(c?.partido || "")}</div>
-      <div class="linha"><span>Votos (oficial)</span><b>${int(c?.votos)}</b></div>
+    h += `<section class="vidro cmp-card" style="--c:${corDe(s)}"><div class="cmp-topo">${avatar(c || s, {tam: 48, cor: corDe(s)})}<div><h3>${esc(titulo(c?.nomeUrna || "Candidato"))}</h3>
+      <div class="sub">${esc(NOME_CARGO[s.cargo])}${c?.partido ? ` · ${partidoHTML(c.partido, {tam: 15})}` : ""}</div></div></div>
+      <div class="linha"><span>Votos no estado (oficial)</span><b>${int(c?.votos)}</b></div>
       <div class="linha"><span>% dos válidos</span><b>${pct(c?.pct / 100, 2)}</b></div>
       <div class="linha"><span>Posição</span><b>${c?.posicao ? c.posicao + "º" : "–"}</b></div>
       <div class="linha"><span>Municípios com voto</span><b>${int(muns.length)}</b></div>
       <div class="linha"><span>Maior município</span><b>${muns[0] ? esc(titulo(muns[0].nome)) : "–"}</b></div></section>`;
   }
-  h += `</div>`;
+  h += `</div><div id="cmpCidade"></div>`;
   // Municípios: top 15 pela soma dos votos
   const soma = new Map();
   for (const {d} of itens) for (const m of d.municipios) soma.set(m.mun, (soma.get(m.mun) || 0) + m.votos);
   const topMun = [...soma.entries()].filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).slice(0, 15).map(([k]) => k);
   const porMun = itens.map(x => new Map(x.d.municipios.map(m => [m.mun, m])));
-  const legenda = `<div class="legend">${itens.map(({s, c}) => `<span><i style="width:10px;height:10px;border-radius:3px;background:${corDe(s)};display:inline-block"></i>${esc(titulo(c?.nomeUrna || "Candidato"))}</span>`).join("")}</div>`;
+  const legenda = legendaCmp(itens);
   const nomeMun = k => titulo(porMun.find(m => m.get(k))?.get(k)?.nome || k);
-  h += `<section class="card vidro"><h2>Votos nos principais municípios</h2><p class="desc">Os 15 municípios com mais votos somando os candidatos selecionados.</p>${legenda}
+  h += `<section class="card vidro"><h2>Votos nos principais municípios do estado</h2><p class="desc">Os 15 municípios com mais votos somando os candidatos selecionados. Clique num município para compará-los escola por escola lá.</p>${legenda}
     <div id="gCmp">${topMun.length ? barras(topMun.map(k => ({rot: nomeMun(k), mun: k, valores: itens.map(({s}, i) => ({v: porMun[i].get(k)?.votos || 0, cor: corDe(s)}))})), {onclick: true}) : `<div class="vazio-estado"><b>Ainda sem boletins</b>Aparece com as primeiras seções.</div>`}</div></section>`;
 
   // Dobradinha por escola
@@ -562,11 +615,11 @@ function viewComparar() {
     }
     const nA = titulo(A.c?.nomeUrna || "Candidato"), nB = titulo(B.c?.nomeUrna || "Candidato");
     const tot = ambos + soA + soB + nenhum;
-    h += `<div class="grid-2"><section class="card vidro"><h2>Dobradinha por escola</h2><p class="desc">Escolas onde cada um tem fatia dos válidos acima da própria média no estado (só escolas com 50+ válidos apurados).</p>
+    h += `<div class="grid-2"><section class="card vidro"><h2>Dobradinha por escola (estado)</h2><p class="desc">Escolas onde cada um tem fatia dos válidos acima da própria média no estado (só escolas com 50+ válidos apurados).</p>
       ${tot ? barras([
         {rot: "Os dois acima da média", valores: [{v: ambos, cor: "#cfd8e0", txt: `${int(ambos)} · ${pct(div(ambos, tot), 0)}`}]},
-        {rot: `Só ${nA}`, valores: [{v: soA, cor: corDe(A.s), txt: `${int(soA)} · ${pct(div(soA, tot), 0)}`}]},
-        {rot: `Só ${nB}`, valores: [{v: soB, cor: corDe(B.s), txt: `${int(soB)} · ${pct(div(soB, tot), 0)}`}]},
+        {rot: `Só ${nA}`, ico: avatar(A.c || A.s, {tam: 22, cor: corDe(A.s)}), valores: [{v: soA, cor: corDe(A.s), txt: `${int(soA)} · ${pct(div(soA, tot), 0)}`}]},
+        {rot: `Só ${nB}`, ico: avatar(B.c || B.s, {tam: 22, cor: corDe(B.s)}), valores: [{v: soB, cor: corDe(B.s), txt: `${int(soB)} · ${pct(div(soB, tot), 0)}`}]},
         {rot: "Nenhum dos dois", valores: [{v: nenhum, cor: COR_OUTRO, txt: `${int(nenhum)} · ${pct(div(nenhum, tot), 0)}`}]},
       ], {max: tot}) : `<div class="vazio-estado"><b>Ainda sem boletins</b></div>`}</section>
       <section class="card vidro"><h2>Escolas fortes para os dois</h2><p class="desc">Maior soma de votos entre as escolas onde ambos ficam acima da média.</p>
@@ -575,8 +628,200 @@ function viewComparar() {
     S._fortes = fortes;
   }
   $("#conteudo").insertAdjacentHTML("beforeend", h);
-  $("#gCmp")?.addEventListener("click", e => { const r = e.target.closest("[data-i]"); if (r) abrirMunicipio(topMun[r.dataset.i]); });
+  $("#gCmp")?.addEventListener("click", e => { const r = e.target.closest("[data-i]"); if (r) { S.cidade = topMun[r.dataset.i]; lsSet("apu.cidade", String(S.cidade)); CMPC.bairro = ""; viewCompararCidade(itens); $("#cmpCidade")?.scrollIntoView({behavior: "smooth", block: "start"}); } });
   $("#gFortes")?.addEventListener("click", e => { const r = e.target.closest("[data-i]"); if (r) abrirLocal(S._fortes[r.dataset.i].id); });
+  viewCompararCidade(itens);
+}
+const legendaCmp = itens => `<div class="legend">${itens.map(({s, c}) => `<span>${avatar(c || s, {tam: 20, cor: corDe(s)})}<i style="width:10px;height:10px;border-radius:3px;background:${corDe(s)};display:inline-block"></i>${esc(titulo(c?.nomeUrna || "Candidato"))}</span>`).join("")}</div>`;
+
+/* ---------- Comparar na cidade: bairro por bairro e escola por escola */
+const CMPC = {mun: null, bairro: "", bai: {ord: "total", dir: -1, q: "", pag: 0}, esc: {ord: "total", dir: -1, q: "", pag: 0}};
+// Quem vence numa linha: maior % dos válidos do próprio cargo (com candidatos do mesmo cargo é o mesmo que mais votos)
+function vencedorCmp(vs) {
+  let m = -1, melhor = -1;
+  vs.forEach((x, i) => { if (x.v > 0 && x.p > melhor) { melhor = x.p; m = i; } });
+  return m;
+}
+const tempoEsgotado = (p, ms, valor) => Promise.race([p, new Promise(ok => setTimeout(() => ok(valor), ms))]);
+
+async function viewCompararCidade(itens) {
+  const token = (viewCompararCidade.token = (viewCompararCidade.token || 0) + 1);
+  const atual = () => token === viewCompararCidade.token && !!$("#cmpCidade");
+  // só mostra "carregando" na primeira vez (trocar de bairro mantém o conteúdo até o novo ficar pronto, sem pular a página)
+  if (!$("#cmpCidade").children.length) $("#cmpCidade").innerHTML = `<section class="card vidro"><div class="vazio-estado"><b>Carregando a comparação na cidade…</b>Escolas, bairros e mapa.</div></section>`;
+  try { await Promise.all([carregarMunicipios(), malhaMunicipios()]); } catch { if (atual()) $("#cmpCidade").innerHTML = vazio("Cidades indisponíveis", "Não foi possível carregar a lista de cidades."); return; }
+  if (!atual()) return;
+  if (!S.cidade || !S.muns.some(m => m.mun === S.cidade)) {
+    S.cidade = S.status?.cidadePadrao || S.status?.capital || S.muns.slice().sort((a, b) => b.eleitores - a.eleitores)[0].mun;
+  }
+  const mun = S.cidade;
+  if (CMPC.mun !== mun) { CMPC.mun = mun; CMPC.bairro = ""; CMPC.bai.pag = CMPC.esc.pag = 0; }
+  const info = S.muns.find(m => m.mun === mun) || {nome: String(mun)};
+  const [todos, lim] = await Promise.all([locaisDaCidade(mun).catch(() => []), tempoEsgotado(limitesDaCidade(mun), 12000, {erro: "tempo"})]);
+  if (!atual()) return;
+
+  // Bairros: limites oficiais do OpenStreetMap quando a cidade tem; senão, o bairro do cadastro de locais do TSE
+  let feats = lim?.bairros?.features || [], rotulo = "bairro";
+  const regs = lim?.regioes?.features || [];
+  if (feats.length < 20 && regs.length > feats.length) { feats = regs; rotulo = "distrito"; }
+  const fonteOSM = feats.length > 0;
+  const caixas = feats.map(f => ({f, bb: caixa(f.geometry), nome: f.properties.nome}));
+  const areaDe = l => {
+    if (fonteOSM && l.lat != null && !l.aproximado) {
+      const a = caixas.find(a => l.lng >= a.bb[0] && l.lng <= a.bb[2] && l.lat >= a.bb[1] && l.lat <= a.bb[3] && noPoligono(l.lng, l.lat, a.f.geometry));
+      if (a) return a.nome;
+    }
+    return titulo(String(l.bairro || "Sem bairro").trim());
+  };
+  const porCand = itens.map(x => new Map(x.d.locais.filter(l => l.mun === mun).map(l => [l.id, l])));
+  const escolas = todos.map(l => {
+    const vs = itens.map((x, i) => { const o = porCand[i].get(l.id); const v = o?.votos || 0, val = o?.validos || 0; return {v, val, p: div(v, val) ?? 0}; });
+    const r = {...l, mun, area: areaDe(l), vs, total: vs.reduce((t, x) => t + x.v, 0), apurada: vs.some(x => x.val > 0)};
+    r.venc = vencedorCmp(vs);
+    r.dif = vs.length > 1 ? vs[0].v - vs[1].v : 0;
+    r.difp = vs.length > 1 ? vs[0].p - vs[1].p : 0;
+    return r;
+  });
+  const bairros = new Map();
+  for (const l of escolas) {
+    const b = bairros.get(l.area) || bairros.set(l.area, {nome: l.area, escolas: [], eleitores: 0, vs: itens.map(() => ({v: 0, val: 0, p: 0}))}).get(l.area);
+    b.escolas.push(l); b.eleitores += l.eleitores || 0;
+    l.vs.forEach((x, i) => { b.vs[i].v += x.v; b.vs[i].val += x.val; });
+  }
+  for (const b of bairros.values()) {
+    b.vs.forEach(x => (x.p = div(x.v, x.val) ?? 0));
+    b.total = b.vs.reduce((t, x) => t + x.v, 0); b.venc = vencedorCmp(b.vs);
+    b.dif = b.vs.length > 1 ? b.vs[0].v - b.vs[1].v : 0;
+    b.nEsc = b.escolas.length;
+  }
+  if (CMPC.bairro && !bairros.has(CMPC.bairro)) CMPC.bairro = "";
+  const listaB = [...bairros.values()];
+  const tot = itens.map((x, i) => { const v = escolas.reduce((t, l) => t + l.vs[i].v, 0), val = escolas.reduce((t, l) => t + l.vs[i].val, 0); return {v, val, p: div(v, val)}; });
+  const ganhaB = itens.map((_, i) => listaB.filter(b => b.venc === i).length);
+  const ganhaE = itens.map((_, i) => escolas.filter(l => l.venc === i).length);
+  const nomeI = i => titulo(itens[i].c?.nomeUrna || "Candidato");
+  const corI = i => corDe(itens[i].s);
+  const plural = (n, s, p) => `${int(n)} ${n === 1 ? s : p}`;
+  const rotB = rotulo === "distrito" ? ["distrito", "distritos", "Distrito"] : ["bairro", "bairros", "Bairro"];
+
+  if (CMPC.mapa) { try { CMPC.mapa.remove(); } catch {} CID.mapas = CID.mapas.filter(x => x !== CMPC.mapa); CMPC.mapa = null; }
+  $("#cmpCidade").innerHTML = `
+    <section class="card vidro cmp-cidade"><div class="cmp-cid-topo">
+      <div><span class="kicker">Comparação na cidade</span><h2 class="cmp-cid-nome">${esc(titulo(info.nome))}</h2>
+        <p class="desc" style="margin-bottom:0">${int(info.eleitores)} eleitores · ${plural(escolas.length, "local de votação", "locais de votação")} · ${plural(listaB.length, rotB[0], rotB[1])}
+        ${fonteOSM ? `(limites do OpenStreetMap)` : `(bairro do cadastro de locais do TSE)`}. Vence quem tem a maior % dos válidos do próprio cargo.</p></div>
+      <div class="filtros cmp-cid-ctrl">
+        <div class="busca-global cid-busca"><div class="campo">${ICONE_BUSCA}
+          <input id="cidBusca" type="search" placeholder="Digite a cidade…" value="${esc(titulo(info.nome))}" autocomplete="off" aria-label="Cidade"></div>
+          <div class="resultados" id="cidRes" role="listbox"></div></div>
+        <label class="sel"><select id="cmpBairro" aria-label="${rotB[2]}"><option value="">Todos os ${rotB[1]}</option>${listaB.slice().sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")).map(b =>
+          `<option value="${esc(b.nome)}" ${b.nome === CMPC.bairro ? "selected" : ""}>${esc(b.nome)} (${b.nEsc})</option>`).join("")}</select></label>
+      </div></div>
+      <div class="cmp-resumo">${itens.map((x, i) => `<div class="cmp-res-card" style="--c:${corI(i)}">${avatar(x.c || x.s, {tam: 44, cor: corI(i)})}
+        <div class="cmp-res-txt"><b>${esc(nomeI(i))}</b><small>${esc(NOME_CARGO[x.s.cargo])}${x.c?.partido ? ` · ${partidoHTML(x.c.partido, {tam: 13})}` : ""}</small>
+          <div class="cmp-res-num"><span><em>${int(tot[i].v)}</em> votos na cidade</span><span><em>${pct(tot[i].p, 2)}</em> dos válidos</span></div>
+          <div class="cmp-res-num"><span>vence em <em>${int(ganhaB[i])}</em> ${ganhaB[i] === 1 ? rotB[0] : rotB[1]}</span><span><em>${int(ganhaE[i])}</em> ${ganhaE[i] === 1 ? "escola" : "escolas"}</span></div></div></div>`).join("")}</div>
+    </section>
+    <section class="card vidro"><h2>Mapa: quem vence em cada escola</h2>
+      <p class="desc">Cor de quem tem a maior % dos válidos na escola; tamanho = soma dos votos dos comparados. ${fonteOSM ? `${rotB[1][0].toUpperCase() + rotB[1].slice(1)} coloridos pelo vencedor; clique num ${rotB[0]} para filtrar.` : ""} Passe o mouse para ver os números.</p>
+      ${legendaCmp(itens)}<div class="mapa-c" id="mCmp"></div><p class="nota" id="mCmp-nota" style="margin-top:8px"></p></section>
+    <section class="card vidro"><h2>${rotB[2]} por ${rotB[0]}</h2><p class="desc">Votos e % dos válidos de cada um, somando as escolas do ${rotB[0]}. Em destaque, quem vence. Clique numa linha para ver as escolas do ${rotB[0]}.</p>
+      <div class="filtros"><div class="campo">${ICONE_BUSCA}<input id="cmpBQ" type="search" placeholder="Filtrar ${rotB[0]}" value="${esc(CMPC.bai.q)}"></div></div><div id="cmpTabB"></div></section>
+    <section class="card vidro" id="cmpEscCard"><h2>Escola por escola${CMPC.bairro ? ` · ${esc(CMPC.bairro)}` : ""}</h2><p class="desc">Cada local de votação da cidade${CMPC.bairro ? ` no ${rotB[0]} escolhido` : ""}. A diferença é entre os dois primeiros escolhidos (${esc(nomeI(0))} − ${esc(nomeI(1))}). Clique numa escola para vê-la no mapa.</p>
+      <div class="filtros"><div class="campo">${ICONE_BUSCA}<input id="cmpEQ" type="search" placeholder="Filtrar escola ou ${rotB[0]}" value="${esc(CMPC.esc.q)}"></div>
+        ${CMPC.bairro ? `<button class="btn" id="cmpBLimpar">Ver todos os ${rotB[1]}</button>` : ""}<button class="btn" id="cmpCsv">Baixar CSV</button></div><div id="cmpTabE"></div></section>`;
+
+  ligarBuscaCidade();
+  const trocarBairro = (b, rolar) => { CMPC.bairro = b; CMPC.esc.pag = 0;
+    viewCompararCidade(itens).then(() => { if (rolar) $("#cmpEscCard")?.scrollIntoView({block: "start"}); }); };
+  $("#cmpBairro").addEventListener("change", e => trocarBairro(e.target.value));
+  $("#cmpBLimpar")?.addEventListener("click", () => trocarBairro(""));
+
+  // colunas por candidato (cabeçalho com foto; destaque na célula de quem vence)
+  const tint = (i, barra) => `style="background:${corI(i)}2e${barra ? `;box-shadow:inset 3px 0 0 ${corI(i)}` : ""}"`;
+  const colsCand = () => itens.flatMap((x, i) => [
+    {k: `v${i}`, t: nomeI(i), n: 1, val: r => r.vs[i].v, thAttr: `style="box-shadow:inset 0 -3px 0 ${corI(i)}"`,
+      th: `<span class="th-cand">${avatar(x.c || x.s, {tam: 24, cor: corI(i)})}<span>${esc(nomeI(i))}<small>${esc(NOME_CARGO[x.s.cargo])} · votos</small></span></span>`,
+      attr: r => r.venc === i ? tint(i, true) : "", f: r => r.vs[i].val ? int(r.vs[i].v) : `<span class="nota">–</span>`},
+    {k: `p${i}`, t: "% válidos", n: 1, val: r => r.vs[i].val ? r.vs[i].p : -1, thAttr: `style="box-shadow:inset 0 -3px 0 ${corI(i)}"`,
+      attr: r => r.venc === i ? tint(i) : "", f: r => r.vs[i].val ? `<span class="${r.venc === i ? "forte" : ""}">${pct(r.vs[i].p, 2)}</span>` : `<span class="nota">–</span>`},
+  ]);
+  const colVence = {k: "venc", t: "Vence", val: r => r.venc, f: r => r.venc >= 0
+    ? `<span class="vence" style="--c:${corI(r.venc)}">${avatar(itens[r.venc].c || itens[r.venc].s, {tam: 22, cor: corI(r.venc)})}<span>${esc(nomeI(r.venc))}</span></span>`
+    : `<span class="nota">${r.total || r.apurada || r.vs?.some(x => x.val) ? "sem voto dos comparados" : "sem boletim"}</span>`};
+
+  const desenharB = () => {
+    const q = norm(CMPC.bai.q);
+    const linhas = listaB.filter(b => !q || norm(b.nome).includes(q));
+    const t = tabela({est: CMPC.bai, linhas, porPag: 25, onRow: b => trocarBairro(b.nome, true), cols: [
+      {k: "nome", t: rotB[2], f: b => `<span class="forte">${esc(b.nome)}</span>${b.nome === CMPC.bairro ? ` <span class="tag">filtrado</span>` : ""}<br><span class="nota">${plural(b.nEsc, "escola", "escolas")}</span>`},
+      ...colsCand(), colVence,
+      {k: "total", t: "Soma", n: 1, f: b => int(b.total)},
+    ]});
+    $("#cmpTabB").innerHTML = t.html; t.ligar($("#cmpTabB"), desenharB);
+  };
+  const marcadores = new Map();
+  const desenharE = () => {
+    const q = norm(CMPC.esc.q);
+    const linhas = escolas.filter(l => (!CMPC.bairro || l.area === CMPC.bairro) && (!q || norm(l.nome).includes(q) || norm(l.area).includes(q) || norm(l.bairro).includes(q)));
+    const t = tabela({est: CMPC.esc, linhas, porPag: 40, onRow: l => {
+      const mk = marcadores.get(l.id);
+      if (mk && CMPC.mapa) { $("#mCmp")?.scrollIntoView({block: "center"}); CMPC.mapa.setView(mk.getLatLng(), 16, {animate: false}); mk.openTooltip(); }
+    }, cols: [
+      {k: "nome", t: "Escola", f: l => `<span class="forte">${esc(titulo(l.nome))}</span><br><span class="nota">${esc(l.area)} · Zona ${esc(l.zona)}</span>`},
+      ...colsCand(), colVence,
+      ...(itens.length > 1 ? [{k: "dif", t: "Diferença", n: 1, val: l => l.apurada ? l.dif : -1e12,
+        th: `Diferença<small class="th-sub">${esc(nomeI(0))} − ${esc(nomeI(1))}</small>`,
+        f: l => !l.apurada ? `<span class="nota">–</span>` : `<b style="color:${l.dif > 0 ? corI(0) : l.dif < 0 ? corI(1) : "inherit"}">${l.dif > 0 ? "+" : l.dif < 0 ? "−" : ""}${int(Math.abs(l.dif))}</b><br><span class="nota">${l.difp > 0 ? "+" : l.difp < 0 ? "−" : ""}${(Math.abs(l.difp) * 100).toLocaleString("pt-BR", {maximumFractionDigits: 1})} p.p.</span>`}] : []),
+      {k: "total", t: "Soma", n: 1, f: l => int(l.total)},
+    ]});
+    $("#cmpTabE").innerHTML = t.html; t.ligar($("#cmpTabE"), desenharE);
+  };
+  desenharB(); desenharE();
+  $("#cmpBQ").addEventListener("input", e => { CMPC.bai.q = e.target.value; CMPC.bai.pag = 0; desenharB(); });
+  $("#cmpEQ").addEventListener("input", e => { CMPC.esc.q = e.target.value; CMPC.esc.pag = 0; desenharE(); });
+  $("#cmpCsv").addEventListener("click", () => baixarCSV(`comparacao_escolas_${norm(info.nome).replace(/\W+/g, "-")}.csv`,
+    ["escola", rotB[0], "zona", "endereco", ...itens.flatMap((x, i) => [`votos_${norm(nomeI(i)).replace(/\W+/g, "_")}`, `pct_validos_${norm(nomeI(i)).replace(/\W+/g, "_")}`]), "vence"],
+    escolas.filter(l => !CMPC.bairro || l.area === CMPC.bairro).map(l => [l.nome, l.area, l.zona, l.endereco || "", ...l.vs.flatMap(x => [x.v, (x.p * 100).toFixed(3)]), l.venc >= 0 ? nomeI(l.venc) : ""])));
+
+  // Mapa
+  const geomMun = geomMunicipio(info.ibge);
+  const comPos = escolas.filter(l => l.lat != null);
+  const doBairro = CMPC.bairro ? comPos.filter(l => l.area === CMPC.bairro && !l.aproximado) : [];
+  const bounds = doBairro.length ? doBairro.map(l => [l.lat, l.lng])
+    : geomMun ? (() => { const [x0, y0, x1, y1] = caixa(geomMun); return [[y0, x0], [y1, x1]]; })()
+    : comPos.length ? comPos.map(l => [l.lat, l.lng]) : caixaEstado();
+  const m = criarMapa("mCmp", bounds);
+  CMPC.mapa = m;
+  if (!m) { $("#mCmp-nota").textContent = "Mapa indisponível (biblioteca de mapas não carregou)."; return; }
+  if (doBairro.length) m.fitBounds(bounds, {padding: [30, 30], maxZoom: 16});
+  const tipCmp = (nome, sub, vs, venc) => `<b>${esc(nome)}</b>${sub ? `<br><span style="opacity:.7">${esc(sub)}</span>` : ""}<div style="margin-top:4px">${vs.map((x, i) =>
+    `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${corI(i)};margin-right:6px"></span>${i === venc ? "<b style='display:inline'>" : ""}${esc(nomeI(i))}: ${int(x.v)} · ${x.val ? pct(x.p, 2) : "–"}${i === venc ? "</b>" : ""}`).join("<br>")}</div>`;
+  if (fonteOSM) {
+    for (const a of caixas) {
+      const b = bairros.get(a.nome);
+      const marg = b && b.venc >= 0 ? (() => { const ps = b.vs.map(x => x.p).sort((x, y) => y - x); return ps.length > 1 ? ps[0] - ps[1] : ps[0]; })() : 0;
+      const estilo = () => ({weight: a.nome === CMPC.bairro ? 2.4 : 0.7, color: a.nome === CMPC.bairro ? "#fff" : "rgba(207,230,243,0.3)",
+        fillColor: b && b.venc >= 0 ? corI(b.venc) : "#1d252e", fillOpacity: b && b.venc >= 0 ? Math.min(0.55, 0.16 + marg * 4) : 0.06});
+      const lyr = L.geoJSON({type: "Feature", geometry: a.f.geometry, properties: {}}, {style: estilo}).addTo(m);
+      lyr.bindTooltip(b ? tipCmp(a.nome, `${plural(b.nEsc, "escola", "escolas")}`, b.vs, b.venc) : `<b>${esc(a.nome)}</b><br><span style="opacity:.7">Sem local de votação aqui</span>`, {sticky: true, className: "tip-l"});
+      lyr.on("mouseover", () => lyr.setStyle({weight: 2, color: "#fff"}));
+      lyr.on("mouseout", () => lyr.setStyle(estilo()));
+      if (b) lyr.on("click", () => trocarBairro(a.nome === CMPC.bairro ? "" : a.nome));
+    }
+  }
+  contornoMunicipio(m, geomMun);
+  const max = Math.max(1, ...comPos.map(l => l.total));
+  for (const l of comPos.slice().sort((a, b) => a.total - b.total)) {
+    const fora = CMPC.bairro && l.area !== CMPC.bairro;
+    const mk = L.circleMarker([l.lat, l.lng], {radius: l.total ? 3 + 11 * Math.sqrt(l.total / max) : 2.5, weight: 1, color: "#090d11",
+      fillColor: l.venc >= 0 ? corI(l.venc) : "#4a525b", fillOpacity: fora ? 0.25 : l.venc >= 0 ? 0.92 : 0.5, opacity: fora ? 0.3 : 1}).addTo(m);
+    mk.bindTooltip(tipCmp(titulo(l.nome), `${l.area}${l.aproximado ? " · posição aproximada" : ""}`, l.vs, l.venc), {className: "tip-l"});
+    marcadores.set(l.id, mk);
+  }
+  const aprox = escolas.filter(l => l.aproximado).length;
+  $("#mCmp-nota").textContent = `${int(comPos.length)} escolas no mapa.` + (aprox ? ` ${aprox} sem coordenada confiável no cadastro do TSE aparecem no centro da cidade.` : "")
+    + (lim?.erro && !fonteOSM ? " Limites de bairros indisponíveis para esta cidade: os bairros vêm do cadastro de locais do TSE." : "");
 }
 
 /* ------------------------------------------------------------------ Relatório */
@@ -673,6 +918,7 @@ $("#gavetaCorpo").addEventListener("click", e => {
 function topHTML(top, s) {
   if (!top?.length) return `<p class="nota">Sem votos apurados ainda.</p>`;
   return barras(top.map((t, i) => ({rot: `${i + 1}º ${titulo(t.nomeUrna || "Candidato")}`, sub: t.partido, eu: t.numero === s.numero,
+    ico: avatar(S.idx.get(`${s.cargo}-${t.numero}`) || t, {tam: 24, cor: t.numero === s.numero ? corDe(s) : ""}),
     valores: [{v: t.votos, cor: t.numero === s.numero ? corDe(s) : COR_OUTRO}]})));
 }
 
@@ -726,6 +972,8 @@ async function abrirLocal(id) {
 /* ------------------------------------------------------------------ render */
 function render(auto = false) {
   renderChips(); renderAbas();
+  // Versão estática: os dados não mudam, então a atualização automática não redesenha a aba (não perde mapa, busca e rolagem)
+  if (auto && window.apiEstatica && S.status) return;
   // Atualização automática no meio de uma interação com tabela/mapa: só redesenha se a aba não for o mapa
   if (auto && S.aba === "mapa" && MAPA) { atualizarMapaSilencioso(); return; }
   const main = $("#conteudo");
@@ -758,11 +1006,15 @@ const UFS = {ac: "Acre", al: "Alagoas", ap: "Amapá", am: "Amazonas", ba: "Bahia
   pe: "Pernambuco", pi: "Piauí", rj: "Rio de Janeiro", rn: "Rio Grande do Norte", rs: "Rio Grande do Sul", ro: "Rondônia", rr: "Roraima",
   sc: "Santa Catarina", sp: "São Paulo", se: "Sergipe", to: "Tocantins"};
 (function seletorEstado() {
-  if (!CLIENTE.geral) return;
+  if (!CLIENTE.geral) {
+    // painel de cliente: só a bandeira do estado ao lado da marca
+    if (UFS[CLIENTE.uf]) $("#marca").insertAdjacentHTML("afterend", `<span class="uf-painel" title="${esc(UFS[CLIENTE.uf])}">${bandeira(CLIENTE.uf, {w: 24, lazy: false})}<span>${esc(CLIENTE.uf.toUpperCase())}</span></span>`);
+    return;
+  }
   $("#marca").href = "../";
-  $("#marca").insertAdjacentHTML("afterend", `<label class="sel-uf"><span class="sr">Estado</span>
+  $("#marca").insertAdjacentHTML("afterend", `<label class="sel-uf"><span class="sr">Estado</span><span class="sel-uf-band" id="selUfBand">${bandeira(CLIENTE.uf, {w: 24, lazy: false})}</span>
     <select id="selUf" aria-label="Estado">${Object.entries(UFS).sort((a, b) => a[1].localeCompare(b[1])).map(([u, n]) => `<option value="${u}" ${u === CLIENTE.uf ? "selected" : ""}>${n}</option>`).join("")}</select></label>`);
-  $("#selUf").addEventListener("change", e => { location.href = `../${e.target.value}/`; });
+  $("#selUf").addEventListener("change", e => { $("#selUfBand").innerHTML = bandeira(e.target.value, {w: 24, lazy: false}); location.href = `../${e.target.value}/`; });
 })();
 
 // Topo: logo do cliente + selo "por MOBI"

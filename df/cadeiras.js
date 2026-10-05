@@ -3,6 +3,8 @@
 "use strict";
 
 const CAD = {est: {ord: "cadeiras", dir: -1, q: "", pag: 0}};
+// Logos dos partidos da agremiação (federação: um ao lado do outro)
+const logosAgremiacao = (sigla, tam = 20) => `<span class="logos">${String(sigla || "").split(/\s*\/\s*/).filter(Boolean).map(p => logoPartido(p, tam)).join("")}</span>`;
 const PROPORCIONAL = new Set([6, 7, 8, 13]);
 
 async function viewCadeiras(s, c, d) {
@@ -54,15 +56,15 @@ async function viewCadeiras(s, c, d) {
   const comCad = r.agremiacoes.filter(a => a.cadeiras > 0 || a.votos >= 0.5 * r.qe).slice(0, 20);
   h += `<div class="grid-2">
     <section class="card vidro"><h2>Cadeiras por partido / federação</h2><p class="desc">Votos (nominais + legenda) e cadeiras projetadas de cada agremiação.</p>
-      <div id="cadBarras">${comecou ? barras(comCad.map(a => ({rot: a.sigla, sub: a.tipo === "Federação" ? "fed." : "", eu: a.id === r.agremiacaoCandidato,
+      <div id="cadBarras">${comecou ? barras(comCad.map(a => ({rot: a.sigla, sub: a.tipo === "Federação" ? "fed." : "", eu: a.id === r.agremiacaoCandidato, ico: logosAgremiacao(a.sigla, 20),
         valores: [{v: a.votos, cor: a.id === r.agremiacaoCandidato ? cor : COR_OUTRO}],
         extra: `${a.cadeiras} ${a.cadeiras === 1 ? "cadeira" : "cadeiras"}`,
         tip: tipHTML(a.nome, [["Votos", int(a.votos)], ["% dos válidos", pct(div(a.votos, r.validos), 2)], ["Quociente partidário", int(a.qp)], ["Sobras", int(a.sobras)], ["Cadeiras", int(a.cadeiras)]])})))
         : `<div class="vazio-estado"><b>Aguardando a apuração</b>A projeção começa com as primeiras seções totalizadas.</div>`}</div></section>
-    <section class="card vidro"><h2>Lista: ${esc(minha?.nome || "")}</h2><p class="desc">Candidatos ${minha?.tipo === "Federação" ? "da federação" : "do partido"} por votos. Em destaque, os que entram na projeção atual.</p>
-      <div class="tbl-wrap"><table><thead><tr><th class="n">#</th><th>Candidato</th><th>Partido</th><th class="n">Votos</th><th>Projeção</th></tr></thead><tbody>
+    <section class="card vidro"><h2 class="h2-logos">${minha ? logosAgremiacao(minha.sigla, 22) : ""}<span>Lista: ${esc(minha?.nome || "")}</span></h2><p class="desc">Candidatos ${minha?.tipo === "Federação" ? "da federação" : "do partido"} por votos. Em destaque, os que entram na projeção atual.</p>
+      <div class="tbl-wrap"><table class="tbl-cand"><thead><tr><th class="n">#</th><th>Candidato</th><th>Partido</th><th class="n">Votos</th><th>Projeção</th></tr></thead><tbody>
       ${(minha?.candidatos || []).slice(0, Math.max(12, (minha?.cadeiras || 0) + 5)).map(x => `<tr${x.numero === s.numero ? ` style="background:rgba(var(--cli-rgb,85,184,230),0.14)"` : ""}>
-        <td class="n">${x.posicao}</td><td class="${x.numero === s.numero ? "forte" : ""}">${esc(titulo(x.nome))}</td><td>${esc(x.partido)}</td>
+        <td class="n">${x.posicao}</td><td class="${x.numero === s.numero ? "forte" : ""}"><span class="cand-cel">${avatar(S.idx.get(`${s.cargo}-${x.numero}`) || {nome: x.nome}, {tam: 30, cor: x.numero === s.numero ? cor : x.projetado && comecou ? "rgba(var(--brand-rgb),0.55)" : ""})}<span>${esc(titulo(x.nome))}</span></span></td><td>${partidoHTML(x.partido, {tam: 18})}</td>
         <td class="n">${int(x.votos)}</td><td>${!comecou ? "" : x.projetado ? `<span class="tag">eleito</span>` : `<span class="tag cinza">suplente</span>`}</td></tr>`).join("")}
       </tbody></table></div>
       ${eu && eu.posicao > Math.max(12, (minha?.cadeiras || 0) + 5) ? `<p class="nota" style="margin-top:8px">${esc(nome)}: ${eu.posicao}º da lista, ${int(eu.votos)} votos.</p>` : ""}</section>
@@ -76,7 +78,7 @@ async function viewCadeiras(s, c, d) {
     const q = norm(CAD.est.q);
     const linhas = r.agremiacoes.filter(a => !q || norm(a.nome).includes(q) || norm(a.sigla).includes(q)).map(a => ({...a, pctv: div(a.votos, r.validos)}));
     const t = tabela({est: CAD.est, linhas, cols: [
-      {k: "sigla", t: "Agremiação", f: a => `<span class="forte"${a.id === r.agremiacaoCandidato ? ` style="color:var(--cli-texto,var(--brand))"` : ""}>${esc(a.sigla)}</span> <span class="nota">${esc(a.tipo)}</span>`},
+      {k: "sigla", t: "Agremiação", f: a => `<span class="cand-cel">${logosAgremiacao(a.sigla, 22)}<span><span class="forte"${a.id === r.agremiacaoCandidato ? ` style="color:var(--cli-texto,var(--brand))"` : ""}>${esc(a.sigla)}</span> <span class="nota">${esc(a.tipo)}</span></span></span>`},
       {k: "votos", t: "Votos", n: 1, f: a => int(a.votos)},
       {k: "pctv", t: "% válidos", n: 1, f: a => pct(a.pctv, 2)},
       {k: "legenda", t: "Legenda", n: 1, f: a => int(a.legenda)},
@@ -102,6 +104,7 @@ function viewMajoritario(s, c) {
   $("#conteudo").insertAdjacentHTML("beforeend", `<section class="card vidro"><h2>${esc(NOME_CARGO[s.cargo])}: ${vagas} ${vagas > 1 ? "vagas" : "vaga"}</h2>
     <p class="desc">Eleição majoritária: ${vagas > 1 ? `os ${vagas} mais votados são eleitos` : "o mais votado é eleito"} (o voto de partido não define cadeiras).</p>
     ${comecou ? barras(lista.map((x, i) => ({rot: `${i + 1}º ${titulo(x.nomeUrna)}`, sub: x.partido, eu: x.numero === s.numero,
+      ico: avatar(x, {tam: 30, cor: x.numero === s.numero ? corDe(s) : i < vagas ? "rgba(var(--brand-rgb),0.55)" : ""}) + logoPartido(x.partido, 18),
       valores: [{v: x.votos, cor: x.numero === s.numero ? corDe(s) : COR_OUTRO}], extra: `${pct(x.pct / 100, 2)}${i < vagas ? " · dentro" : ""}`})))
       : `<div class="vazio-estado"><b>Aguardando a apuração</b></div>`}</section>`);
 }

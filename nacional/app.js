@@ -118,14 +118,14 @@ async function dadosUF(uf) {
   const c = N.cacheUf.get(uf);
   if (c && Date.now() - c.t < 30000) return c;
   const [status, cands] = await Promise.all([api(`/${uf}/api/status`), api(`/${uf}/api/candidatos`)]);
-  const o = {t: Date.now(), status, cands};
+  const o = {t: Date.now(), status, cands, uf};
   N.cacheUf.set(uf, o);
   return o;
 }
 function resumoDeputados(du, cargo) {
   const s = du.status.cargos?.[cargo]; if (!s) return null;
   const lista = du.cands.filter(c => c.cargo === cargo).sort((a, b) => b.votos - a.votos)
-    .map(c => ({n: c.numero, nome: c.nomeUrna, partido: c.partido, votos: c.votos, pct: c.pct, eleito: c.eleito, foto: null}));
+    .map(c => ({n: c.numero, nome: c.nomeUrna, partido: c.partido, votos: c.votos, pct: c.pct, eleito: c.eleito, foto: fotoDep(du.uf, c)}));
   return {pct: s.secoes?.pct, validos: s.validos, brancos: s.brancos, nulos: s.nulos, eleitores: s.eleitores, comparecimento: s.comparecimento,
     abstencao: s.abstencao, final: s.totalizacaoFinal, vagas: s.vagas || 1, candidatos: lista};
 }
@@ -157,6 +157,8 @@ function renderControles() {
     <optgroup label="Estados">${Object.entries(NOMES).sort((a, b) => a[1].localeCompare(b[1])).map(([u, n]) => `<option value="${u}">${n}</option>`).join("")}</optgroup>
     <option value="zz">Exterior (Presidente)</option>`;
   sel.value = N.escopo;
+  if (!$("#escBand")) sel.insertAdjacentHTML("beforebegin", `<span class="esc-band" id="escBand" aria-hidden="true"></span>`);
+  $("#escBand").innerHTML = ehUF(N.escopo) ? bandeira(N.escopo, 30).replace(' loading="lazy"', "") : "";
   $("#cargos").innerHTML = CARGOS.map(([c]) => {
     const ok = N.escopo !== "zz" || c === 1;
     return `<button data-c="${c}" aria-pressed="${N.cargo === c}" ${ok ? "" : "disabled"} title="${ok ? "" : "No exterior só se vota para Presidente"}">${esc(cargoNome(c))}</button>`;
@@ -164,7 +166,7 @@ function renderControles() {
   const abas = [["resultado", "Resultado"], ["mapa", "Mapa"], ["todos", "Mapa de todos os candidatos"], ["regioes", "Regiões e estados"], ["cidades", "Cidades"], ["escolas", "Colégios"], ["candidatos", "Comparar candidatos"], ["comparar", "Comparar cidades"]];
   $("#abas").innerHTML = abas.map(([k, n]) => `<button role="tab" data-a="${k}" aria-selected="${N.aba === k}">${n}${k === "comparar" && N.cmp.length ? ` (${N.cmp.length})` : k === "candidatos" && N.cmpCand.length ? ` (${N.cmpCand.length})` : ""}</button>`).join("");
   $("#titulo").textContent = `${cargoNome(N.cargo)} · ${nomeEscopo()}`;
-  $("#painelUf").innerHTML = ehUF(N.escopo) ? `<a class="btn" href="/${N.escopo}/">Painel completo de ${esc(NOMES[N.escopo])} →</a>` : "";
+  $("#painelUf").innerHTML = ehUF(N.escopo) ? `<a class="btn" href="/${N.escopo}/">${bandeira(N.escopo, 20)} Painel completo de ${esc(NOMES[N.escopo])} →</a>` : "";
 }
 $("#escopo").addEventListener("change", e => irPara(e.target.value));
 $("#cargos").addEventListener("click", e => { const b = e.target.closest("button[data-c]"); if (!b || b.disabled) return; N.cargo = Number(b.dataset.c); N.modo = "lider"; render(); });
@@ -184,6 +186,22 @@ function selo(c, r, i) {
   return "";
 }
 const foto = (u, cls = "") => u ? `<img class="${cls}" src="${esc(u)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : "";
+// Bandeiras dos estados (Wikimedia Commons, domínio público; PNG pequeno em /bandeiras/<uf>.png) e logos oficiais dos partidos (Commons); sem logo: círculo com a sigla
+const bandeira = (uf, w = 22) => NOMES[uf] ? `<img class="bandeira" src="/bandeiras/${uf}.png" alt="Bandeira: ${esc(NOMES[uf])}" width="${w}" height="${Math.round(w * 0.7)}" loading="lazy" decoding="async" onerror="this.remove()">` : "";
+const LOGOS_PARTIDOS = {AGIR: "svg", AVANTE: "svg", CIDADANIA: "svg", DC: "svg", DEMOCRATA: "png", MDB: "svg", MISSAO: "svg", MOBILIZA: "png", NOVO: "svg", PCB: "svg", PCDOB: "svg", PCO: "svg", PDT: "png", PL: "svg", PMB: "png", PODE: "svg", PP: "svg", PRD: "svg", PRTB: "png", PSB: "svg", PSD: "svg", PSDB: "svg", PSOL: "svg", PSTU: "png", PT: "svg", PV: "svg", REDE: "svg", REPUBLICANOS: "svg", SOLIDARIEDADE: "svg", UNIAO: "svg", UP: "svg"};
+const siglaNorm = s => semAcento(s).toUpperCase().replace(/[^A-Z0-9]/g, "");
+const PALETA_SEM_LOGO = ["#3d6fb6", "#b5473a", "#7a5bb8", "#2f8a64", "#b0832a", "#3a8f9c", "#a64d7c", "#5b7a2e"];
+const corPartido = k => PALETA_SEM_LOGO[[...k].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7) % PALETA_SEM_LOGO.length];
+function logoPartido(sigla, tam = 18) {
+  const k = siglaNorm(sigla), ext = LOGOS_PARTIDOS[k];
+  return `<span class="lp${ext ? "" : " sem"}" style="--lp:${tam}px;--lp-c:${corPartido(k)}" title="${esc(sigla)}"><span class="sg" aria-hidden="true">${esc(k.length > 4 ? k.slice(0, 3) : k)}</span>${ext
+    ? `<img src="/partidos/${k}.${ext}" alt="" width="${tam}" height="${tam}" loading="lazy" decoding="async" onerror="this.parentNode.classList.add('sem');this.remove()">` : ""}</span>`;
+}
+// sigla com logo(s) (federação: logos lado a lado)
+const logosDe = (sigla, tam = 18) => `<span class="logos">${String(sigla || "").split(/\s*\/\s*/).filter(Boolean).map(p => logoPartido(p, tam)).join("")}</span>`;
+const partidoH = (sigla, tam = 16) => sigla ? `<span class="partido">${logosDe(sigla, tam)}<span>${esc(sigla)}</span></span>` : "";
+// foto oficial do TSE pelo sqcand (deputados vêm da lista de candidatos de cada estado)
+const fotoDep = (uf, c) => c.sqcand ? `https://resultados.tse.jus.br/oficial/ele2026/${c.cargo === 1 ? 6257 : 6259}/fotos/${c.cargo === 1 ? "br" : uf}/${c.sqcand}.jpeg` : null;
 function kpis(r) {
   if (!r) return "";
   const comp = r.comparecimento || (r.validos + r.brancos + r.nulos);
@@ -205,7 +223,7 @@ function listaCands(r, limite = 60) {
   if (!r?.candidatos?.length) return `<div class="vazio">Sem votos apurados ainda.</div>`;
   const cores = coresDe(r), max = r.candidatos[0].pct || 1;
   return `<div class="cands">${r.candidatos.slice(0, limite).map((c, i) => `<button class="pc" data-cand="${c.n}">${foto(c.foto)}
-      <div style="min-width:0;flex:1"><div class="n">${esc(nome(c.nome))}${selo(c, r, i)}</div><div class="s">${esc(c.partido)} · ${i + 1}º</div>
+      <div style="min-width:0;flex:1"><div class="n">${esc(nome(c.nome))}${selo(c, r, i)}</div><div class="s">${partidoH(c.partido, 16)} · ${i + 1}º</div>
         <div class="barra"><i style="width:${(c.pct / max * 100).toFixed(1)}%;background:${cores.get(c.n) || OUTRO}"></i></div></div>
       <div class="v"><b>${pct(c.pct / 100, 2)}</b><small>${int(c.votos)} votos</small></div></button>`).join("")}</div>
     ${r.candidatos.length > limite ? `<p class="nota">Mostrando os ${limite} mais votados de ${r.candidatos.length}. Veja todos no painel completo do estado.</p>` : ""}`;
@@ -215,13 +233,13 @@ document.addEventListener("click", e => {
   N.modo = "c:" + b.dataset.cand; N.aba = "mapa"; render();
 });
 function linhaCand(c, cor) {
-  return `<div class="linha">${c.foto ? foto(c.foto) : `<i class="bola" style="background:${cor}"></i>`}<span>${esc(nome(c.nome))} <small>${esc(c.partido)}</small></span><em>${pct(c.pct / 100)}</em></div>`;
+  return `<div class="linha">${c.foto ? foto(c.foto) : `<i class="bola" style="background:${cor}"></i>`}<span>${esc(nome(c.nome))} <small>${logosDe(c.partido, 14)} ${esc(c.partido)}</small></span><em>${pct(c.pct / 100)}</em></div>`;
 }
 function cartaoUF(uf, cargo) {
   const r = N.D?.estados?.[uf]?.[CHAVE_CARGO[cargo]];
   const n = cargo === 5 && r?.vagas > 1 ? 3 : 2;
   return `<button class="card uf" data-uf="${uf}">
-    <div class="uf-top"><span class="sigla">${uf.toUpperCase()}</span><b>${NOMES[uf]}</b>${r ? `<span class="ap">${prog((r.pct || 0) / 100)} ${pct((r.pct || 0) / 100, 0)}</span>` : ""}</div>
+    <div class="uf-top">${bandeira(uf, 30)}<span class="sigla">${uf.toUpperCase()}</span><b>${NOMES[uf]}</b>${r ? `<span class="ap">${prog((r.pct || 0) / 100)} ${pct((r.pct || 0) / 100, 0)}</span>` : ""}</div>
     <div>${r ? r.candidatos.slice(0, n).map((c, i) => linhaCand(c, PALETA[i]).replace("</span><em>", `${selo(c, r, i)}</span><em>`)).join("") : `<div class="nota">Carregando…</div>`}</div>
     ${r ? `<div class="nota">Brancos ${pct(div(r.brancos, r.comparecimento))} · Nulos ${pct(div(r.nulos, r.comparecimento))} · Abstenção ${pct(div(r.abstencao, r.eleitores))}</div>` : ""}
   </button>`;
@@ -276,7 +294,7 @@ async function mapaResumo() {
     ${pc.f.map(f => { const a = areas.get(f.id); const fora = !naRegiao.has(f.id);
       const top = a ? a.cands.slice(0, 3).map(c => `${nome(c.nome)} (${c.partido}): ${pct(c.pct / 100)}`).join("\n") : "";
       return `<path data-uf="${f.id}" d="${f.d}" fill="${a && !fora ? corDe(a) : "#12171d"}" fill-opacity="${fora ? 0.35 : 0.9}" stroke="#0b1015" stroke-width="0.8" style="cursor:pointer"><title>${esc(NOMES[f.id] || "")}\n${esc(top)}\nApurado ${pct((a ? a.pctApurado : 0), 0)}</title></path>`; }).join("")}
-    </svg><div class="legenda">${[...leg].map(([n, c]) => `<span><b style="background:${c}"></b>${esc(n)}</span>`).join("")}</div></div>`;
+    </svg><div class="legenda">${[...leg].map(([n, c]) => `<span><b style="background:${c}"></b>${N.cargo === 1 ? "" : logosDe(n, 15) + " "}${esc(n)}</span>`).join("")}</div></div>`;
 }
 // Governador/Senador no Brasil: quantos estados cada partido lidera
 function resumoPartidos() {
@@ -288,7 +306,7 @@ function resumoPartidos() {
   const decididos = areas.filter(a => a.cands.some(c => c.eleito)).length;
   return `<h2 style="margin-bottom:6px">${N.cargo === 3 ? "Governos estaduais" : "Senado (2 vagas por estado)"} por partido</h2>
     <p class="nota" style="margin:0 0 12px">${N.cargo === 3 ? "Estados em que cada partido lidera para governador" : "Vagas de cada partido pelos 2 mais votados de cada estado"} · ${decididos} de ${areas.length} estados já com eleito</p>
-    ${ord.map(([p, n], i) => `<div class="linha"><i class="bola" style="background:${PALETA[i] || OUTRO}"></i><span style="flex:0 0 120px">${esc(p)}</span><span class="barra" style="flex:1;margin:0;height:8px"><i style="width:${n / mx * 100}%;background:${PALETA[i] || OUTRO}"></i></span><em style="width:28px;text-align:right">${n}</em></div>`).join("")}`;
+    ${ord.map(([p, n], i) => `<div class="linha"><i class="bola" style="background:${PALETA[i] || OUTRO}"></i><span style="flex:0 0 150px">${partidoH(p, 18)}</span><span class="barra" style="flex:1;margin:0;height:8px"><i style="width:${n / mx * 100}%;background:${PALETA[i] || OUTRO}"></i></span><em style="width:28px;text-align:right">${n}</em></div>`).join("")}`;
 }
 function blocoRegioes() {
   const cores = coresDe(N.D?.brasil);
@@ -311,7 +329,7 @@ function situacaoEstados() {
     else aberto.push([u, r.candidatos.slice(0, N.cargo === 5 ? 2 : 1)]);
   }
   const bloco = (tit, lista, cor) => lista.length ? `<div class="card pad"><h2 style="margin-bottom:10px">${tit} <span class="nota">(${lista.length})</span></h2>${lista.map(([u, cs]) =>
-    `<div class="linha" data-uf="${u}" style="cursor:pointer"><span class="sigla" style="padding:5px 6px;font-size:11px">${u.toUpperCase()}</span><span>${cs.map(c => `${esc(nome(c.nome))} <small>${esc(c.partido)} ${pct(c.pct / 100)}</small>`).join(" × ")}</span></div>`).join("")}</div>` : "";
+    `<div class="linha" data-uf="${u}" style="cursor:pointer">${bandeira(u, 24)}<span class="sigla" style="padding:5px 6px;font-size:11px">${u.toUpperCase()}</span><span>${cs.map(c => `${esc(nome(c.nome))} <small>${logosDe(c.partido, 13)} ${esc(c.partido)} ${pct(c.pct / 100)}</small>`).join(" × ")}</span></div>`).join("")}</div>` : "";
   return `<div class="grade" style="grid-template-columns:repeat(auto-fill,minmax(320px,1fr));margin-bottom:14px">${bloco("Eleitos", eleitos)}${bloco("2º turno", turno2)}${bloco(N.cargo === 3 ? "Ainda em apuração · lidera" : "Ainda em apuração · lideram", aberto)}</div>`;
 }
 
@@ -536,7 +554,7 @@ async function viewRegioes(main) {
       <div class="tab-wrap"><table class="ordenavel" id="tabReg"><thead><tr><th>Região / estado</th><th>Apurado</th>${top.map(c => `<th><span class="bola" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${cores.get(c.n)}"></span> ${esc(nome(c.nome))}</th>`).join("")}<th>Brancos</th><th>Nulos</th><th>Abstenção</th></tr></thead>
       <tbody>${linhas.map(({nome: n, chave, r, reg}) => {
         const v = new Map(r.candidatos.map(c => [c.n, c]));
-        return `<tr data-escopo="${chave}"><td>${chave.startsWith("r:") ? `<b>${esc(n)}</b>` : esc(n)}${reg ? ` <span class="nota">${esc(reg)}</span>` : ""}</td><td data-v="${r.pct}">${pct((r.pct || 0) / 100, 0)}</td>
+        return `<tr data-escopo="${chave}"><td>${chave.startsWith("r:") ? `<b>${esc(n)}</b>` : `${bandeira(chave, 20)} ${esc(n)}`}${reg ? ` <span class="nota">${esc(reg)}</span>` : ""}</td><td data-v="${r.pct}">${pct((r.pct || 0) / 100, 0)}</td>
           ${top.map(c => `<td data-v="${v.get(c.n)?.pct ?? -1}">${pct((v.get(c.n)?.pct ?? 0) / 100)}</td>`).join("")}
           <td data-v="${div(r.brancos, r.comparecimento)}">${pct(div(r.brancos, r.comparecimento))}</td><td data-v="${div(r.nulos, r.comparecimento)}">${pct(div(r.nulos, r.comparecimento))}</td>
           <td data-v="${div(r.abstencao, r.eleitores)}">${pct(div(r.abstencao, r.eleitores))}</td></tr>`;
@@ -552,7 +570,7 @@ async function viewRegioes(main) {
 /* ---------- cidades do estado */
 function escolhaEstado(oque) {
   return `<p class="nota">Escolha um estado para ver ${oque}.</p><div class="grade" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr))">${ufsDoEscopo().map(u =>
-    `<button class="card uf" data-uf="${u}" style="flex-direction:row;align-items:center"><span class="sigla">${u.toUpperCase()}</span><b>${NOMES[u]}</b></button>`).join("")}</div>`;
+    `<button class="card uf" data-uf="${u}" style="flex-direction:row;align-items:center">${bandeira(u, 30)}<span class="sigla">${u.toUpperCase()}</span><b>${NOMES[u]}</b></button>`).join("")}</div>`;
 }
 async function viewCidades(main) {
   const t = N.tok;
@@ -588,7 +606,7 @@ function ligarBusca(id, filtro, escolher) {
     if (q.length < 2) { sug.classList.remove("aberto"); return; }
     const lista = (await carregarCidades()).filter(c => filtro(c) && semAcento(c[2]).includes(q))
       .sort((a, b) => (semAcento(a[2]).startsWith(q) ? 0 : 1) - (semAcento(b[2]).startsWith(q) ? 0 : 1) || a[2].localeCompare(b[2])).slice(0, 30);
-    sug.innerHTML = lista.map(c => `<button data-c="${c[0]}|${c[1]}|${esc(c[2])}"><span>${esc(nome(c[2]))}</span><small>${c[0].toUpperCase()}</small></button>`).join("") || `<div class="nota" style="padding:10px">Nenhuma cidade</div>`;
+    sug.innerHTML = lista.map(c => `<button data-c="${c[0]}|${c[1]}|${esc(c[2])}"><span>${esc(nome(c[2]))}</span><small>${bandeira(c[0], 18)} ${c[0].toUpperCase()}</small></button>`).join("") || `<div class="nota" style="padding:10px">Nenhuma cidade</div>`;
     sug.classList.add("aberto");
   };
   inp.addEventListener("input", mostrar);
@@ -657,7 +675,7 @@ async function viewComparar(main) {
   const cargo = N.cargo > 5 ? 1 : N.cargo;
   main.innerHTML = `<div class="barra-ferr">${caixaBusca("qCmp", "Adicionar cidade de qualquer estado")}
     <button class="btn" id="cmpCapitais">Capitais do Sudeste</button><button class="btn" id="cmpNE">Capitais do Nordeste</button>${N.cmp.length ? `<button class="btn" id="cmpLimpar">Limpar</button>` : ""}</div>
-    <div class="chips" id="cmpChips">${N.cmp.map((c, i) => `<span class="chip">${esc(nome(c.nome))} <small class="nota">${c.uf.toUpperCase()}</small><button data-rm="${i}" aria-label="Remover ${esc(nome(c.nome))}">×</button></span>`).join("")}</div>
+    <div class="chips" id="cmpChips">${N.cmp.map((c, i) => `<span class="chip">${bandeira(c.uf, 20)}${esc(nome(c.nome))} <small class="nota">${c.uf.toUpperCase()}</small><button data-rm="${i}" aria-label="Remover ${esc(nome(c.nome))}">×</button></span>`).join("")}</div>
     <div id="cmpCorpo" style="margin-top:14px">${N.cmp.length ? `<div class="vazio">Carregando resultado oficial de cada cidade…</div>` : `<div class="vazio">Adicione até 8 cidades para comparar ${esc(cargoNome(cargo))}, brancos, nulos e abstenção lado a lado.</div>`}</div>
     ${N.cargo > 5 ? `<p class="nota">A comparação entre cidades mostra Presidente, Governador e Senador.</p>` : ""}`;
   ligarBusca("qCmp", () => true, (uf, mun, n) => { addCmp(uf, mun, n); render(); });
@@ -686,7 +704,7 @@ async function viewComparar(main) {
     linhasCand = [0, 1, 2, 3].map(i => `<tr><td>${i + 1}º lugar</td>${cols.map(c => { const x = c.r?.candidatos[i]; return `<td>${x ? `${esc(nome(x.nome))} <span class="nota">${esc(x.partido)}</span> ${pct(x.pct / 100)}` : "–"}</td>`; }).join("")}</tr>`).join("");
   }
   $("#cmpCorpo").innerHTML = `<div class="card pad"><h2 style="margin-bottom:12px">${esc(cargoNome(cargo))} · resultado oficial do TSE por cidade</h2><div class="tab-wrap cmp"><table>
-    <thead><tr><th>&nbsp;</th>${cols.map(c => `<th style="cursor:default">${esc(nome(c.nome))} <span class="nota">${c.uf.toUpperCase()}</span></th>`).join("")}</tr></thead><tbody>
+    <thead><tr><th>&nbsp;</th>${cols.map(c => `<th style="cursor:default">${bandeira(c.uf, 18)} ${esc(nome(c.nome))} <span class="nota">${c.uf.toUpperCase()}</span></th>`).join("")}</tr></thead><tbody>
     ${linhasCand}
     ${linhaTot("<b>Seções apuradas</b>", r => pct((r.pct || 0) / 100, 1))}
     ${linhaTot("Eleitores", r => int(r.eleitores))}
@@ -810,11 +828,11 @@ function plenario(lista, cores) {
     <text x="0" y="-0.08" text-anchor="middle" fill="#f5f7f9" style="font:700 0.16px var(--display)">${S}</text><text x="0" y="0.02" text-anchor="middle" fill="#a7adb4" style="font:500 0.06px var(--sans)">cadeiras</text></svg>`;
 }
 function blocoEleitos(uf, e, cores, aberto) {
-  return `<details ${aberto ? "open" : ""}><summary style="cursor:pointer;display:flex;gap:10px;align-items:center;list-style:none"><span class="sigla">${uf.toUpperCase()}</span><b style="font-size:16px">${esc(NOMES[uf])}</b>
+  return `<details ${aberto ? "open" : ""}><summary style="cursor:pointer;display:flex;gap:10px;align-items:center;list-style:none">${bandeira(uf, 30)}<span class="sigla">${uf.toUpperCase()}</span><b style="font-size:16px">${esc(NOMES[uf])}</b>
       <span class="nota">${e.vagas} vagas · ${e.fonte === "tse" ? "cadeiras oficiais do TSE" : "projeção"} · ${pct((e.pct || 0) / 100, 0)} apurado</span></summary>
-    <div class="leg" style="margin:10px 0">${e.agremiacoes.sort((a, b) => b.cadeiras - a.cadeiras).map(a => `<span><b style="background:${cores.get(a.sigla.split(/\s*\/\s*/)[0]) || OUTRO}"></b>${esc(a.sigla)}: ${a.cadeiras}</span>`).join("")}</div>
+    <div class="leg" style="margin:10px 0">${e.agremiacoes.sort((a, b) => b.cadeiras - a.cadeiras).map(a => `<span><b style="background:${cores.get(a.sigla.split(/\s*\/\s*/)[0]) || OUTRO}"></b>${logosDe(a.sigla, 15)} ${esc(a.sigla)}: ${a.cadeiras}</span>`).join("")}</div>
     <div class="tab-wrap" style="max-height:360px"><table><thead><tr><th style="cursor:default">Quem entra</th><th style="cursor:default">Partido</th><th style="cursor:default">Votos</th></tr></thead>
-    <tbody>${e.eleitos.map(c => `<tr style="cursor:default"><td>${esc(nome(c.nome))}${c.eleito ? '<span class="selo">Eleito</span>' : ""}</td><td><span class="bola" style="background:${cores.get(c.partido) || OUTRO}"></span>${esc(c.partido)}</td><td>${int(c.votos)}</td></tr>`).join("")}</tbody></table></div></details>`;
+    <tbody>${e.eleitos.map(c => `<tr style="cursor:default"><td>${esc(nome(c.nome))}${c.eleito ? '<span class="selo">Eleito</span>' : ""}</td><td><span class="bola" style="background:${cores.get(c.partido) || OUTRO}"></span>${partidoH(c.partido, 16)}</td><td>${int(c.votos)}</td></tr>`).join("")}</tbody></table></div></details>`;
 }
 async function viewBancadas(main, porRegiao) {
   const t = N.tok;
@@ -842,7 +860,7 @@ async function viewBancadas(main, porRegiao) {
     </div>
     <div class="mapa-wrap"><div class="card pad"><h2 style="margin-bottom:6px">${casa} · ${esc(nomeEscopo())}</h2><p class="nota" style="margin:0 0 6px">Cadeiras de cada partido somando os estados (quociente eleitoral e sobras de cada estado; quando o TSE já publica as cadeiras, usamos o número oficial).</p>
       ${plenario(lista, cores)}
-      ${lista.map(p => `<div class="linha"><i class="bola" style="background:${cores.get(p.partido) || OUTRO}"></i><span style="flex:0 0 130px">${esc(p.partido)}</span><span class="barra" style="flex:1;margin:0;height:8px"><i style="width:${p.cadeiras / mx * 100}%;background:${cores.get(p.partido) || OUTRO}"></i></span><em style="width:80px;text-align:right">${p.cadeiras} <small>${pct(p.cadeiras / vagas, 0)}</small></em></div>`).join("")}</div>
+      ${lista.map(p => `<div class="linha"><i class="bola" style="background:${cores.get(p.partido) || OUTRO}"></i><span style="flex:0 0 150px">${partidoH(p.partido, 18)}</span><span class="barra" style="flex:1;margin:0;height:8px"><i style="width:${p.cadeiras / mx * 100}%;background:${cores.get(p.partido) || OUTRO}"></i></span><em style="width:80px;text-align:right">${p.cadeiras} <small>${pct(p.cadeiras / vagas, 0)}</small></em></div>`).join("")}</div>
     <div class="card pad"><h2 style="margin-bottom:6px">Maior bancada em cada estado</h2><p class="nota" style="margin:0 0 8px">Clique num estado para ver quem entra.</p>
       <svg viewBox="-4 -4 ${pc.W + 8} ${pc.H + 8}" style="width:100%;height:auto;max-height:480px">${pc.f.map(f => { const m = maior(f.id); const fora = !naRegiao.has(f.id);
         return `<path data-uf="${f.id}" d="${f.d}" fill="${m && !fora ? cores.get(m[0]) || OUTRO : "#12171d"}" fill-opacity="${fora ? 0.35 : 0.9}" stroke="#0b1015" stroke-width="0.8" style="cursor:pointer"><title>${esc(NOMES[f.id] || "")}: ${m ? esc(m[0]) + " " + m[1] + " de " + (cam.estados[f.id]?.vagas || "") : ""}</title></path>`; }).join("")}</svg></div></div>

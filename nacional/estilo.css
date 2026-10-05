@@ -138,3 +138,21 @@ td.lider{text-align:left}
 .gaveta .fechar{position:absolute;right:16px;top:16px}
 footer{color:var(--faint);font-size:12.5px;padding:24px 0 40px;letter-spacing:.04em}
 @media (max-width:560px){header.topo img{height:32px}.sel{min-width:0;width:100%}.controles .seg{width:100%}}
+/* Bandeiras dos estados e logos dos partidos */
+.bandeira{display:inline-block;flex:none;object-fit:cover;border-radius:3px;vertical-align:middle;background:var(--card2);box-shadow:0 0 0 1px rgba(255,255,255,.18),0 2px 6px -2px rgba(0,0,0,.7)}
+.linha img.bandeira,.pc img.bandeira{height:auto;aspect-ratio:10/7;border-radius:3px}
+.esc-band{display:inline-flex;align-items:center;min-width:0}
+.esc-band:empty{display:none}
+.lp{position:relative;display:inline-flex;align-items:center;justify-content:center;flex:none;width:var(--lp,18px);height:var(--lp,18px);border-radius:5px;background:#fff;padding:1.5px;vertical-align:middle;overflow:hidden;box-shadow:0 0 0 1px rgba(255,255,255,.12)}
+.lp img,.linha .lp img,.pc .lp img{width:100%;height:100%;object-fit:contain;display:block;border-radius:0;background:none}
+.lp .sg{display:none}
+.lp.sem{background:var(--lp-c,#3d6fb6);border-radius:50%;padding:0}
+.lp.sem .sg{display:block;color:#fff;font:700 calc(var(--lp,18px)*.34)/1 var(--sans);letter-spacing:-.03em;flex:none;overflow:visible}
+.partido{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;vertical-align:middle}
+.logos{display:inline-flex;align-items:center;gap:2px;flex:none;vertical-align:middle}
+.linha .lp,.linha .logos,.linha .partido,.linha .partido span,.linha .lp span{flex:none;overflow:visible;min-width:0}
+.linha span.partido > span:last-child{overflow:hidden;text-overflow:ellipsis}
+.pc .s .partido{gap:4px}
+.pc img:not(.bandeira):not([width]){width:52px;height:72px;object-fit:cover;object-position:50% 18%}
+.legenda .logos{margin-right:2px}
+.linha .sigla{flex:none;overflow:visible}

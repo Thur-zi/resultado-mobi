@@ -38,7 +38,7 @@ async function viewRegioes(s, c, d) {
       <span class="reg-topo"><b>${esc(r.nome)}</b><small>${int(r.municipios.length)} municípios · ${int(r.eleitores)} eleitores</small></span>
       <span class="reg-ap">${progHTML(ap)}</span>
       <span class="reg-eu" style="--c:${corDe(s)}">${esc(nome)}: ${r.posicao ? `<b>${r.posicao}º</b> · ${int(r.votos)} votos · ${pct(div(r.votos, r.validos), 2)}` : "sem votos apurados ainda"}</span>
-      <ol class="reg-top">${r.top.slice(0, 5).map(t => `<li class="${t.numero === s.numero ? "eu" : ""}"><span>${esc(titulo(t.nomeUrna))} <small>${esc(t.partido)}</small></span><b>${int(t.votos)}</b></li>`).join("")
+      <ol class="reg-top">${r.top.slice(0, 5).map(t => `<li class="${t.numero === s.numero ? "eu" : ""}"><span>${avatar(S.idx.get(`${s.cargo}-${t.numero}`) || t, {tam: 20, cor: t.numero === s.numero ? corDe(s) : ""})} ${esc(titulo(t.nomeUrna))} <small>${esc(t.partido)}</small></span><b>${int(t.votos)}</b></li>`).join("")
         || `<li class="nota">Sem boletins apurados</li>`}</ol>
     </button>`;
   }).join("");
@@ -87,7 +87,7 @@ async function viewRegionaisCapital(s, c, d) {
       <span class="reg-topo"><b>${esc(rn)}</b><small>${int(a.locais.length)} escolas · ${int(a.eleitores)} eleitores</small></span>
       <span class="reg-ap">${progHTML(ap)}</span>
       <span class="reg-eu" style="--c:${corDe(s)}">${esc(nome)}: ${r?.posicao ? `<b>${r.posicao}º</b> · ${int(r.votos)} votos · ${pct(div(a.votos, a.validos), 2)}` : "sem votos apurados ainda"}</span>
-      <ol class="reg-top">${(r?.top || []).slice(0, 5).map(t => `<li class="${t.numero === s.numero ? "eu" : ""}"><span>${esc(titulo(t.nomeUrna))} <small>${esc(t.partido)}</small></span><b>${int(t.votos)}</b></li>`).join("")
+      <ol class="reg-top">${(r?.top || []).slice(0, 5).map(t => `<li class="${t.numero === s.numero ? "eu" : ""}"><span>${avatar(S.idx.get(`${s.cargo}-${t.numero}`) || t, {tam: 20, cor: t.numero === s.numero ? corDe(s) : ""})} ${esc(titulo(t.nomeUrna))} <small>${esc(t.partido)}</small></span><b>${int(t.votos)}</b></li>`).join("")
         || `<li class="nota">Sem boletins apurados</li>`}</ol>
     </button>`;
   }).join("");

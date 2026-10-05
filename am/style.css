@@ -467,3 +467,97 @@ body.sem-rolagem { overflow: hidden; }
   color:#f5f7f9;border:1px solid rgba(255,255,255,.14);border-radius:10px;padding:8px 30px 8px 12px;font:600 14px/1.2 inherit;font-family:inherit;cursor:pointer;max-width:210px}
 .sel-uf select:focus-visible{outline:2px solid rgb(var(--brand-rgb,85,184,230));outline-offset:2px}
 .sel-uf option{background:#11161c;color:#f5f7f9}
+
+/* ---------------- Fotos, partidos e bandeiras ---------------- */
+/* Avatar: tamanho fixo (sem pular layout), anel na cor da série, iniciais por baixo caso a foto do TSE falhe */
+.av { position: relative; display: inline-flex; align-items: center; justify-content: center; flex: none; width: var(--av, 32px); height: var(--av, 32px);
+  border-radius: 50%; overflow: hidden; vertical-align: middle; background: linear-gradient(145deg, var(--surface-3), var(--surface-2));
+  box-shadow: 0 0 0 2px var(--av-c, rgba(255,255,255,0.14)), 0 4px 12px -6px rgba(0,0,0,0.8); transition: box-shadow .2s, transform .25s var(--ease); }
+.av .ini { font: 600 calc(var(--av, 32px) * 0.36)/1 var(--font-display); color: var(--muted-fg); letter-spacing: 0; user-select: none; }
+.av img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 18%; }
+.av.av-grande { box-shadow: 0 0 0 3px var(--av-c, rgba(255,255,255,0.14)), 0 0 0 7px rgba(255,255,255,0.04), 0 18px 40px -18px rgba(0,0,0,0.9); }
+.avs { display: inline-flex; flex: none; }
+.avs .av + .av { margin-left: -12px; }
+/* Logo do partido: fundo claro arredondado (os logos oficiais são feitos para fundo branco); sem logo: círculo com a sigla */
+.lp { position: relative; display: inline-flex; align-items: center; justify-content: center; flex: none; width: var(--lp, 20px); height: var(--lp, 20px);
+  border-radius: 6px; background: #fff; padding: 1.5px; vertical-align: middle; overflow: hidden; box-shadow: 0 0 0 1px rgba(255,255,255,0.12); }
+.lp img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.lp .sg { display: none; }
+.lp.sem { background: var(--lp-c, #3d6fb6); border-radius: 50%; padding: 0; box-shadow: 0 0 0 1px rgba(255,255,255,0.18) inset; }
+.lp.sem .sg { display: block; color: #fff; font: 700 calc(var(--lp, 20px) * 0.34)/1 var(--font-sans); letter-spacing: -0.03em; }
+.partido { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; vertical-align: middle; }
+.logos { display: inline-flex; align-items: center; gap: 2px; flex: none; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.bandeira { display: inline-block; flex: none; object-fit: cover; border-radius: 3px; vertical-align: middle;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.18), 0 2px 6px -2px rgba(0,0,0,0.7); background: var(--surface-2); }
+
+/* Chips com foto */
+.chip { padding-left: 5px; }
+.chip .av { margin-right: 1px; }
+.chip:hover .av { transform: scale(1.05); }
+.chip .txt small .partido { gap: 3px; }
+.btn-cand { padding-left: 6px; }
+
+/* "+ Candidato": lista com foto, partido e quadrinho de marcar */
+.add-pop { width: min(460px, calc(100vw - 32px)); }
+.add-pop .resultados { max-height: min(420px, 60vh); }
+.add-item { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 10px; cursor: pointer; transition: background .15s; }
+.add-item:hover { background: rgba(var(--brand-rgb),0.08); }
+.add-item.ativo { background: rgba(var(--brand-rgb),0.12); }
+.add-item input[type=checkbox] { flex: none; width: 18px; height: 18px; margin: 0; accent-color: var(--brand); cursor: pointer; }
+.add-txt { display: flex; flex-direction: column; min-width: 0; flex: 1; line-height: 1.25; }
+.add-txt b { font-weight: 600; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.add-txt small { display: flex; align-items: center; gap: 5px; color: var(--faint); font-size: 11.5px; margin-top: 2px; white-space: nowrap; overflow: hidden; }
+.add-txt .sep-p { opacity: .6; }
+.add-v { color: var(--faint); font-size: 11.5px; white-space: nowrap; font-variant-numeric: tabular-nums; flex: none; }
+.add-pe { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+.add-pe .btn { height: 32px; }
+.resultados button.res-cand { align-items: center; }
+
+/* Cabeçalho do candidato */
+.cabeca-cand { display: flex; align-items: center; gap: 18px; min-width: 0; }
+.cabeca-cand p .partido { margin-right: 4px; }
+@media (max-width: 760px) { .cabeca-cand { gap: 12px; } .cabeca-cand .av-grande { --av: 56px !important; } }
+
+/* Barras com foto/logo no rótulo */
+.barra-l .rot.com-ico { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.barra-l .rot.com-ico .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.barra-l .rot.com-ico .lp { margin-left: -2px; }
+.barra-l.clicavel:hover .av { box-shadow: 0 0 0 2px rgba(var(--brand-rgb),0.7); }
+
+/* Tabelas com candidato/partido */
+.cand-cel { display: inline-flex; align-items: center; gap: 9px; }
+.h2-logos { display: flex; align-items: center; gap: 9px; }
+.th-cand { display: inline-flex; align-items: center; gap: 7px; text-transform: none; letter-spacing: 0; font-size: 12px; color: var(--foreground); vertical-align: middle; }
+.th-cand small, .th-sub { display: block; color: var(--faint); font-size: 10.5px; text-transform: none; letter-spacing: 0; font-weight: 400; }
+.vence { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; white-space: nowrap; padding: 2px 9px 2px 3px; border-radius: 999px;
+  background: color-mix(in srgb, var(--c) 18%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 45%, transparent); }
+
+/* Comparar */
+.cmp-topo { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+.cmp-card .sub { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.cmp-cid-topo { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 14px; }
+.cmp-cid-nome { font-size: clamp(20px, 2.6vw, 28px) !important; font-weight: 700 !important; margin-top: 8px; }
+.cmp-cid-ctrl { margin: 0; }
+.cmp-cid-ctrl .cid-busca { width: min(300px, 100%); }
+.cmp-cid-ctrl .sel select { max-width: 260px; }
+.cmp-resumo { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; margin-top: 16px; }
+.cmp-res-card { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--c) 14%, transparent), rgba(255,255,255,0.02) 60%); border-left: 3px solid var(--c); }
+.cmp-res-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cmp-res-txt > b { font-size: 14.5px; }
+.cmp-res-txt > small { color: var(--faint); font-size: 11.5px; display: flex; align-items: center; gap: 4px; }
+.cmp-res-num { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12.5px; color: var(--muted-fg); margin-top: 4px; }
+.cmp-res-num em { font-style: normal; font-weight: 700; color: var(--foreground); font-variant-numeric: tabular-nums; }
+.legend .av { margin-right: -2px; }
+
+/* Bandeira do estado no topo */
+.sel-uf { gap: 8px; }
+.sel-uf-band { display: inline-flex; }
+.uf-painel { display: inline-flex; align-items: center; gap: 6px; flex: none; font: 600 12px var(--font-display); letter-spacing: .08em; color: var(--muted-fg); }
+@media (max-width: 760px) { .uf-painel span { display: none; } }
+.cmp-cid-ctrl .busca-global.cid-busca { order: 0; }
+.cmp-cid-topo > div:first-child { flex: 1 1 420px; min-width: 0; }
+.cmp-cid-ctrl { flex: 0 1 auto; }
+.cmp-cid-ctrl .busca-global.cid-busca { width: 300px; max-width: 100%; }
+#cmpEscCard, #cmpCidade .card { scroll-margin-top: 130px; }
