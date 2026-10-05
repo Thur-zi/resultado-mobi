@@ -74,11 +74,15 @@ function dica(u, tipo) {
 function duelo() {
   const c = E.B.cand, mg = soma(ESC), bh = soma(ESC.filter(e => e.mun === BH));
   const lado = (k, x, foto, selo, u) => `<div class="lado ${k}">
-    <div class="topo-l"><img class="foto" src="fotos/${foto}" alt="Foto de ${esc(x.nome)}"><div><img class="selo" src="marca/${selo}" alt="${esc(x.nome)}"><span class="sit ${/eleito/i.test(x.situacao) ? "ok" : ""}">${esc(x.situacao)}</span> <span class="nota">${esc(x.partido)} · ${esc(x.cargo)}</span></div></div>
+    <div class="topo-l"><img class="foto" src="fotos/${foto}" alt="Foto de ${esc(x.nome)}"><div><img class="selo" src="marca/${selo}" alt="${esc(x.nome)}"></div></div>
     <div class="nums"><div><b>${int(x.votos)}</b><span>votos em Minas</span></div><div><b>${pct(k === "w" ? mg.wp : mg.fp, 2)}</b><span>dos válidos do cargo</span></div><div><b>${pct(k === "w" ? bh.w / mg.w : bh.f / mg.f, 0)}</b><span>dos votos vieram de BH</span></div></div>
   </div>`;
   $("#duelo").innerHTML = lado("w", c.w, "wanderley.jpg", "selo-wanderley.png") +
-    `<div class="meio"><span class="xx">×</span><b>${dec(mg.razao, 0)}</b><span>votos do Wanderley a cada 100 do Fred em Minas</span><b style="margin-top:8px">${dec(bh.razao, 0)}</b><span>em Belo Horizonte</span></div>` +
+    `<div class="meio"><span class="xx">×</span><span class="mt">A dobradinha</span>
+      <p class="mq">A cada <b class="cf">100 votos do Fred</b>, quantos o <b class="cw">Wanderley</b> teve?</p>
+      ${[["Em Minas", mg.razao], ["Em BH", bh.razao]].map(([n, r]) => `<div class="mr"><span class="mn">${n}</span>
+        <div class="mbs"><div class="mbl"><i class="bf" style="width:100%"></i><em>Fred 100</em></div><div class="mbl"><i class="bw" style="width:${Math.min(100, r)}%"></i><em>Wanderley ${dec(r, 0)}</em></div></div></div>`).join("")}
+    </div>` +
     lado("f", c.f, "fred.jpg", "selo-fred.png");
 }
 function destaques() {
