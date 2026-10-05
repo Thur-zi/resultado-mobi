@@ -57,7 +57,7 @@
     
     <div class="dep-busca card"><div class="db-tit"><b>Escolha até 4 deputados</b><span>Federal ou estadual, 2022 ou 2026. Com um só, ele ocupa a tela toda; com mais de um, ficam lado a lado.</span></div>
       <label class="busca grande"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>
-        <input id="qDep" list="lDeps" placeholder="Digite o nome de um deputado…" autocomplete="off" aria-label="Escolher deputado"><datalist id="lDeps"></datalist></label>
+        <input id="qDep" placeholder="Digite o nome de um deputado…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="acDeps" aria-label="Escolher deputado"><div class="ac" id="acDeps" role="listbox" hidden></div></label>
       <div class="seg" id="filtroCargo" role="group" aria-label="Cargo"><button data-c="0" aria-pressed="true">Todos</button><button data-c="6">Federais</button><button data-c="7">Estaduais</button></div>
       <div class="seg" id="filtroAno" role="group" aria-label="Ano"><button data-a="0" aria-pressed="true">2022 e 2026</button><button data-a="26">2026</button><button data-a="22">2022</button></div>
       <div id="chips" class="chips"></div>
@@ -80,9 +80,11 @@
 
   <!-- Mapa -->
   <section class="painel" id="p-mapa" role="tabpanel" hidden>
-    <div class="sec-cab"><h2 id="mapaTitulo">Mapa</h2><p>Passe o mouse ou toque para ver os números. Clique para abrir o comparativo do lugar.</p></div>
+    <div class="sec-cab"><h2 id="mapaTitulo">Mapa</h2><p>Toque numa região para dar zoom e ver só as cidades dela; toque numa cidade para ver detalhes e os mais votados. Use a trilha acima do mapa para voltar.</p></div>
     <div class="linha-ctl"><span class="rot">Ver por</span><div class="seg nivelSeg" role="group" aria-label="Ver por"></div></div>
     <div class="linha-ctl"><span class="rot">Pintar por</span><div class="seg rolar" id="modoMapa" role="group" aria-label="O que mostrar no mapa"></div></div>
+    <nav class="migalhas" id="migalhas" aria-label="Onde você está"></nav>
+    <div class="atalhos" id="atalhos"></div>
     <div class="mapa-grande">
       <div><div class="mapa" id="mapa"></div><div class="legenda" id="legenda"></div></div>
       <aside class="card ranking" id="ranking"></aside>
@@ -91,7 +93,7 @@
 
   <!-- Regiões -->
   <section class="painel" id="p-regioes" role="tabpanel" hidden>
-    <div class="sec-cab"><h2>Mapas de cada região</h2><p>Um mapa para cada macrorregião, microrregião ou região, com as cidades pintadas. Clique num cartão para abrir o comparativo completo.</p></div>
+    <div class="sec-cab"><h2>Mapas de cada região</h2><p>Um mapa para cada macrorregião, microrregião, região ou zona. Toque num cartão para ver a região grande no mapa, ou numa cidade para ver detalhes.</p></div>
     <div class="linha-ctl"><span class="rot">Divisão</span><div class="seg" id="galNivel" role="group" aria-label="Divisão regional">
       <button data-g="me" aria-pressed="true">Macrorregiões <small>12</small></button><button data-g="mi">Microrregiões <small>66</small></button><button data-g="ri">Regiões intermediárias <small>13</small></button><button data-g="rm">Regiões imediatas <small>70</small></button><button data-g="zona">Zonas eleitorais <small>304</small></button></div></div>
     <div class="linha-ctl"><span class="rot">Pintar por</span><div class="seg rolar" id="galModo" role="group" aria-label="O que mostrar nos mapas"></div></div>

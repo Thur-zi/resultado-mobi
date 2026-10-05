@@ -243,6 +243,7 @@ function prepararGeo() {
     E.pth.set(f.properties.ibge, d); E.bb.set(f.properties.ibge, [x0, y0, x1, y1]);
     X0 = Math.min(X0, x0); X1 = Math.max(X1, x1); Y0 = Math.min(Y0, y0); Y1 = Math.max(Y1, y1);
   }
+  E.munDe = new Map(Object.entries(E.B.municipios).map(([m, x]) => [x.ibge, m]));
   E.vbMG = `${X0 - 4} ${Y0 - 4} ${X1 - X0 + 8} ${Y1 - Y0 + 8}`;
   // Minas inteira num só desenho, reaproveitado pelos mapinhas de localização
   document.body.insertAdjacentHTML("beforeend", `<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><path id="mgTodo" d="${[...E.pth.values()].join("")}"/></defs></svg>`);
@@ -260,7 +261,7 @@ function cartaoRegiao(u, modo, q, cidMap) {
   const itens = muns.map(m => { const c = cidMap.get(m); return {ibge: ibgeDe(m), pop: `mun|${m}`, cor: corValor(c, modo, q), titulo: c ? `${c.nome}: Lula ${pct(c.lula26)} · Flávio ${pct(c.bol26)}` : ""}; });
   const viraram = muns.filter(m => cidMap.get(m)?.virou).length, nLula = muns.filter(m => familia(cidMap.get(m)?.venc26) === "lula").length;
   const barra = (a, b, ca, cb) => `<div class="duo"><i style="width:${a * 100}%;background:${ca}"></i><i style="width:${b * 100}%;background:${cb}"></i></div>`;
-  return `<button class="card regiao" data-abrir="${u.nivel}|${esc(u.chave)}">
+  return `<div class="card regiao" role="button" tabindex="0" data-focar="${u.nivel}|${esc(u.chave)}" title="Ver ${esc(u.nome)} grande no mapa">
     <div class="rg-cab"><div><b>${esc(u.nivel === "me" ? u.nome : u.nome.replace(/^(Microrregião|Região intermediária|Região imediata) de /, ""))}</b><small>${int(muns.length)} ${muns.length === 1 ? "cidade" : "cidades"} · ${int(u.aptos)} eleitores</small></div>${localizador(muns.map(ibgeDe))}</div>
     ${miniSvg(itens)}
     <div class="rg-venc"><span class="venc"><i style="background:${corCand(u.venc26)}"></i>${esc(NOME_EXIBE(u.venc26))}</span>${u.virou ? '<span class="virou">virou</span>' : ""}</div>
@@ -268,8 +269,9 @@ function cartaoRegiao(u, modo, q, cidMap) {
     <div class="rg-linha"><span>2022</span>${barra(u.lula22, u.bol22, COR.lula, COR.bolso)}<small>Lula ${pct(u.lula22)} · Jair ${pct(u.bol22)}</small></div>
     <div class="rg-chips"><span class="${u.dLula > 0 ? "pos" : "neg"}">Lula ${pp(u.dLula)}</span><span class="${u.dBol > 0 ? "pos" : "neg"}">Bolsonaro ${pp(u.dBol)}</span><span>${int(nLula)} de ${int(muns.length)} com Lula</span>${viraram ? `<span class="am">${int(viraram)} viraram</span>` : ""}</div>
     ${u.f26 ? `<div class="rg-top"><span>Mais votados 2026</span>${celTop(u.f26)}${celTop(u.e26)}</div>` : ""}
+    <div class="rg-bts"><span class="rg-ver">Ver no mapa grande ↗</span><button class="btn mini" data-abrir="${u.nivel}|${esc(u.chave)}">Comparativo completo</button></div>
     ${E.deps.length ? `<div class="rg-deps">${E.deps.map((s, j) => { const nm = muns.filter(m => cidMap.get(m)?.["rk" + j] === 1).length; return `<span><i style="background:${s.cor}"></i>${esc(s.d.nome)} ${s.d.ano}: <b>${pct(u["dp" + j], 2)}</b> · ${u["rk" + j] === 1 ? "<b>1º aqui</b>" : u["rk" + j] < 99 ? u["rk" + j] + "º aqui" : "abaixo do 20º"} · mais votado em ${int(nm)} ${nm === 1 ? "cidade" : "cidades"}</span>`; }).join("")}</div>` : ""}
-  </button>`;
+  </div>`;
 }
 function galeria() {
   E.galModo = validaModo(E.galModo); botoesModo("#galModo", E.galModo);
@@ -336,62 +338,134 @@ function novoMapa(id) {
   m.setView([-18.6, -44.6], 6);
   // o mapa pode nascer escondido (aba fechada); reenquadra quando ganhar tamanho
   let larg = 0;
-  new ResizeObserver(() => { const w = $("#" + id).clientWidth; if (w && Math.abs(w - larg) > 40) { larg = w; m.invalidateSize(); if (m._limites) m.fitBounds(m._limites); } }).observe($("#" + id));
+  new ResizeObserver(() => { const w = $("#" + id).clientWidth; if (w && Math.abs(w - larg) > 40) { larg = w; m.invalidateSize(); const alvo = m._alvo || m._limites; if (alvo) m.fitBounds(alvo); } }).observe($("#" + id));
   return m;
+}
+// ---- explorador: clicar numa região dá zoom nela e mostra só as cidades dela; trilha para voltar
+const PAI = {mi: "me", rm: "ri"};
+const FILHO = {me: "mi", ri: "rm"};
+function paiDe(nivel, chave) { const p = PAI[nivel]; if (!p) return null; const u = unidade(nivel, chave); const m = u && E.B.municipios[u.mzs[0].split("-")[0]]; return m ? {nivel: p, chave: m[p]} : null; }
+function focar(nivel, chave, irPara = true) {
+  if (nivel && nivel !== "zona" && nivel !== "mun" && E.nivel !== nivel && !(PAI[nivel] && E.nivel === PAI[nivel])) { E.nivel = nivel; segNivel(); E.unidades = agrupar(E.nivel); }
+  if (nivel === "zona" && E.nivel !== "zona") { E.nivel = "zona"; segNivel(); E.unidades = agrupar("zona"); }
+  E.foco = nivel ? {nivel, chave} : null; E.voar = true;
+  fecharPop();
+  if (irPara && E.aba !== "mapa") irAba("mapa"); else desenharMapa();
+}
+document.addEventListener("click", e => {
+  if (e.target.closest("[data-pop]") || e.target.closest("[data-abrir]")) return;
+  const f = e.target.closest("[data-focar]"); if (!f) return;
+  const v = f.dataset.focar; if (!v) return focar(null);
+  const [n, ...c] = v.split("|"); focar(n, c.join("|"));
+});
+document.addEventListener("keydown", e => { const f = e.target.closest?.("[data-focar]"); if (f && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); f.click(); } });
+function migalhas() {
+  const f = E.foco, partes = [`<button data-focar="" class="${f ? "" : "atual"}">Minas Gerais</button>`];
+  if (f) { const pai = paiDe(f.nivel, f.chave); if (pai) { const up = unidade(pai.nivel, pai.chave); partes.push(`<button data-focar="${pai.nivel}|${esc(pai.chave)}">${esc(up?.nome || pai.chave)}</button>`); }
+    const u = unidade(f.nivel, f.chave); partes.push(`<button class="atual" data-focar="${f.nivel}|${esc(f.chave)}"><small>${NIVEL1[f.nivel]}</small> ${esc(u?.nome || "")}</button>`); }
+  $("#migalhas").innerHTML = partes.join('<span class="sep" aria-hidden="true">›</span>') + (f ? `<button class="voltar" data-focar="${(() => { const p = paiDe(f.nivel, f.chave); return p ? `${p.nivel}|${esc(p.chave)}` : ""; })()}">← Voltar</button>` : "");
+  // atalhos: todas as regiões do recorte atual, para ir direto
+  const nv = f ? (FILHO[f.nivel] || null) : (REGIAO(E.nivel) ? E.nivel : null);
+  let lista = nv ? agrupar(nv) : [];
+  if (f && nv) { const s = new Set(cidadesDe(unidade(f.nivel, f.chave))); lista = lista.filter(u => s.has(u.mzs[0].split("-")[0])); }
+  $("#atalhos").innerHTML = lista.length ? `<span class="rot">${f ? "Dentro daqui" : NIVEIS[nv]}</span>` + lista.slice().sort((a, b) => b.aptos - a.aptos).map(u => `<button data-focar="${u.nivel}|${esc(u.chave)}" class="${E.foco?.chave === u.chave ? "on" : ""}"><i style="background:${corCand(u.venc26)}"></i>${esc(u.nome.replace(/^(Microrregião|Região intermediária|Região imediata) de /, ""))}</button>`).join("") : (!f ? `<span class="nota">Escolha <b>Macrorregiões</b>, <b>Microrregiões</b> ou <b>Regiões</b> em "Ver por" para navegar por elas; toque numa região no mapa para dar zoom.</span>` : "");
 }
 function desenharMapa() {
   if (E.aba !== "mapa") return;
   if (!E.mapa) E.mapa = novoMapa("mapa");
+  const pane = E.mapa.getPanes().overlayPane;
+  pane.classList.add("trocando");
   if (E.camada) E.camada.remove();
   E.modo = validaModo(E.modo); botoesModo("#modoMapa", E.modo);
+  const foco = E.foco && unidade(E.foco.nivel, E.foco.chave);
+  if (E.foco && !foco) E.foco = null;
   // cor de cada município: a da unidade que o contém (região) ou a da própria cidade
   const unidadeDe = new Map();
   const nivelMapa = E.nivel === "mg" || E.nivel === "zona" ? "mun" : E.nivel;
   const lista = agrupar(nivelMapa);
   for (const u of lista) for (const k of u.mzs) unidadeDe.set(k.split("-")[0], u);
-  const porIbge = new Map(Object.entries(E.B.municipios).map(([m, x]) => [x.ibge, unidadeDe.get(m)]));
-  const q = quebras(lista.map(u => u[E.modo]));
-  const grupo = L.featureGroup(), regiao = REGIAO(E.nivel);
-  L.geoJSON(E.geo, {style: f => ({color: regiao ? "rgba(11,16,21,.35)" : "#0b1015", weight: regiao ? .2 : .4, fillOpacity: E.nivel === "zona" ? .25 : .9, fillColor: corValor(porIbge.get(f.properties.ibge), E.modo, q)}),
-    onEachFeature: (f, l) => { const u = porIbge.get(f.properties.ibge); if (!u) return; l.bindTooltip(dica(u), {sticky: true}); l.on("click", ev => popover(u.nivel, u.chave, ev)); }}).addTo(grupo);
-  let listaRank = lista;
-  if (E.nivel === "zona") {
+  const cidMap = new Map(agrupar("mun").map(c => [c.chave, c]));
+  // dentro do foco: cada cidade com o próprio resultado (numa zona, a parte da cidade que fica nela)
+  const dentro = new Map();
+  if (foco) {
+    if (E.foco.nivel === "zona") for (const k of foco.mzs) { const m = k.split("-")[0]; dentro.set(m, Object.assign(somar([k]), {nome: `${E.B.municipios[m]?.nome} (Zona ${E.foco.chave})`, nivel: "mun", chave: m}, maisVotados("mun", m), posicoes("mun", m))); }
+    else for (const m of cidadesDe(foco)) dentro.set(m, cidMap.get(m));
+  }
+  const q = quebras(lista.map(u => u[E.modo])), qc = quebras(agrupar("mun").map(c => c[E.modo]));
+  const grupo = L.featureGroup(), grupoFoco = L.featureGroup(), regiao = REGIAO(E.nivel);
+  L.geoJSON(E.geo, {
+    style: f => {
+      const m = E.munDe.get(f.properties.ibge), c = dentro.get(m);
+      if (c) return {color: "#0b1015", weight: .8, fillOpacity: .95, fillColor: corValor(c, E.modo, qc)};
+      const u = unidadeDe.get(m);
+      if (foco) return {color: "rgba(255,255,255,.05)", weight: .3, fillOpacity: .12, fillColor: corValor(u, E.modo, q)};
+      return {color: regiao ? "rgba(11,16,21,.35)" : "#0b1015", weight: regiao ? .2 : .4, fillOpacity: E.nivel === "zona" ? .25 : .9, fillColor: corValor(u, E.modo, q)};
+    },
+    onEachFeature: (f, l) => {
+      const m = E.munDe.get(f.properties.ibge), c = dentro.get(m);
+      if (c) { l.addTo(grupoFoco); l.bindTooltip(dica(c), {sticky: true}); l.on("click", ev => popover("mun", m, ev)); return; }
+      const u = unidadeDe.get(m); if (!u) return;
+      const vaiFocar = u.nivel !== "mun";
+      l.bindTooltip(foco ? `<b>${esc(u.nome)}</b><br><small>${vaiFocar ? "toque para ir até lá" : "toque para ver detalhes"}</small>` : dica(u) + (vaiFocar ? "<br><small style='color:#55b8e6'>toque para dar zoom</small>" : ""), {sticky: true});
+      l.on("click", ev => vaiFocar ? focar(u.nivel, u.chave) : popover("mun", u.chave, ev));
+    }}).addTo(grupo);
+  let listaRank = foco ? [...dentro.values()] : lista;
+  if (E.nivel === "zona" && !foco) {
     listaRank = E.unidades;
     const qz = quebras(E.unidades.map(u => u[E.modo])), mx = Math.max(...E.unidades.map(u => u.aptos));
     for (const u of E.unidades) {
       const z = E.B.zonas[u.chave]; if (!z?.lat) continue;
       L.circleMarker([z.lat, z.lng], {radius: 4 + 14 * Math.sqrt(u.aptos / mx), color: "#0b1015", weight: 1, fillOpacity: .9, fillColor: corValor(u, E.modo, qz)})
-        .bindTooltip(dica(u), {sticky: true}).on("click", ev => popover("zona", u.chave, ev)).addTo(grupo);
+        .bindTooltip(dica(u) + "<br><small style='color:#55b8e6'>toque para dar zoom</small>", {sticky: true}).on("click", () => focar("zona", u.chave)).addTo(grupo);
     }
   }
   E.camada = grupo.addTo(E.mapa);
   if (!E.mapa._limites) { E.mapa._limites = grupo.getBounds(); if ($("#mapa").clientWidth) E.mapa.fitBounds(E.mapa._limites); }
-  $("#legenda").innerHTML = legenda(E.modo, q);
-  $("#mapaTitulo").textContent = E.nivel === "zona" ? "Mapa · zonas eleitorais (círculos)" : `Mapa · ${NIVEIS[nivelMapa]}`;
-  ranking(listaRank);
+  if (E.voar) { E.voar = false; const alvo = foco ? grupoFoco.getBounds().pad(.06) : E.mapa._limites; E.mapa._alvo = foco ? alvo : null; if (alvo?.isValid() && $("#mapa").clientWidth) { let foi = false; E.mapa.once("moveend", () => foi = true); E.mapa.flyToBounds(alvo, {duration: .9, easeLinearity: .2}); setTimeout(() => { if (!foi) E.mapa.fitBounds(alvo, {animate: false}); }, 1400); } }
+  setTimeout(() => pane.classList.remove("trocando"), 60);
+  $("#legenda").innerHTML = legenda(E.modo, foco ? qc : q);
+  $("#mapaTitulo").textContent = foco ? foco.nome : E.nivel === "zona" ? "Mapa · zonas eleitorais" : `Mapa · ${NIVEIS[nivelMapa]}`;
+  migalhas();
+  const painel = $("#ranking");
+  painel.classList.remove("entra"); void painel.offsetWidth; painel.classList.add("entra");
+  painel.innerHTML = (foco ? painelFoco(foco, [...dentro.values()]) : "") + ranking(listaRank);
+}
+// resumo do lugar em foco, ao lado do mapa
+function painelFoco(u, cidades) {
+  const filho = FILHO[E.foco.nivel], subs = filho ? agrupar(filho).filter(x => cidades.some(c => c.chave === x.mzs[0].split("-")[0])) : [];
+  const nLula = cidades.filter(c => familia(c.venc26) === "lula").length, vir = cidades.filter(c => c.virou).length;
+  const barra = (a, b) => `<div class="duo"><i style="width:${a * 100}%;background:${COR.lula}"></i><i style="width:${b * 100}%;background:${COR.bolso}"></i></div>`;
+  return `<div class="foco-cab"><span class="selo mini">${NIVEL1[E.foco.nivel]}</span><h3>${esc(u.nome)}</h3><p class="nota">${int(cidades.length)} ${cidades.length === 1 ? "cidade" : "cidades"} · ${int(u.aptos)} eleitores</p></div>
+    <div class="pop-pres"><div><span>2022</span>${barra(u.lula22, u.bol22)}<small>Lula ${pct(u.lula22)} · Jair ${pct(u.bol22)}</small></div><div><span>2026</span>${barra(u.lula26, u.bol26)}<small>Lula ${pct(u.lula26)} · Flávio ${pct(u.bol26)}</small></div></div>
+    <div class="rg-chips"><span class="${u.dLula > 0 ? "pos" : "neg"}">Lula ${pp(u.dLula)}</span><span class="${u.dBol > 0 ? "pos" : "neg"}">Bolsonaro ${pp(u.dBol)}</span><span>${int(nLula)} de ${int(cidades.length)} com Lula</span>${vir ? `<span class="am">${int(vir)} viraram</span>` : ""}</div>
+    ${u.f26 ? `<div class="rg-top"><span>Mais votados 2026</span>${celTop(u.f26)}${celTop(u.e26)}</div>` : ""}
+    ${E.deps.length ? `<div class="rg-deps">${E.deps.map((s, j) => `<span><i style="background:${s.cor}"></i>${esc(s.d.nome)} ${s.d.ano}: <b>${pct(u["dp" + j], 2)}</b> · ${posTxt(u["rk" + j] ?? 99)}</span>`).join("")}</div>` : ""}
+    <div class="foco-bts"><button class="btn prim" data-abrir="${E.foco.nivel}|${esc(E.foco.chave)}">Comparativo completo →</button></div>
+    ${subs.length ? `<h4 class="sub">${NIVEIS[filho]} <small>toque para dar zoom</small></h4><ol class="rank">${subs.sort((a, b) => b.aptos - a.aptos).map(x => `<li><button data-focar="${x.nivel}|${esc(x.chave)}"><span><i class="pt" style="background:${corCand(x.venc26)}"></i>${esc(x.nome.replace(/^(Microrregião|Região imediata) de /, ""))}</span><b>${int(x.aptos)}</b></button></li>`).join("")}</ol>` : ""}
+    <hr class="div">`;
 }
 function ranking(lista) {
-  const m = E.modo, nome = nomeModo(m), item = (u, v) => `<li><button data-abrir="${u.nivel}|${esc(u.chave)}"><span>${esc(u.nome)}</span><b>${v}</b></button></li>`;
+  const m = E.modo, nome = nomeModo(m);
+  const item = (u, v) => `<li><button ${u.nivel === "mun" ? `data-pop="mun|${esc(u.chave)}"` : `data-focar="${u.nivel}|${esc(u.chave)}"`}><span>${esc(u.nome)}</span><b>${v}</b></button></li>`;
+  const onde = E.foco ? "cidades daqui" : "lugares";
   let html;
   if (POS(m)) {
     const b = corBasePos(m), l = lista.map(u => [u, posDe(u, m)]), tot = lista.reduce((t, u) => t + u.aptos, 0);
     const prim = l.filter(x => x[1] === 1).sort((a, c) => c[0].aptos - a[0].aptos);
-    html = `<h3 class="h3c">${esc(nomeModo(m))}</h3><div class="cont">${FAIXAS_POS.map(([r, t], i) => { const lo = i ? FAIXAS_POS[i - 1][0] : 0, g = l.filter(x => x[1] != null && x[1] > lo && x[1] <= (i === 4 ? 1e9 : r)); return `<div class="cont-l"><i style="background:${corPos(i === 4 ? 99 : r, b)}"></i><b>${t}</b><span>${int(g.length)} lugares · ${pct(g.reduce((a, x) => a + x[0].aptos, 0) / tot)} dos eleitores</span></div>`; }).join("")}</div>
+    return `<h3 class="h3c">${esc(nome)}</h3><div class="cont">${FAIXAS_POS.map(([r, t], i) => { const lo = i ? FAIXAS_POS[i - 1][0] : 0, g = l.filter(x => x[1] != null && x[1] > lo && x[1] <= (i === 4 ? 1e9 : r)); return `<div class="cont-l"><i style="background:${corPos(i === 4 ? 99 : r, b)}"></i><b>${t}</b><span>${int(g.length)} ${onde} · ${pct(g.reduce((a, x) => a + x[0].aptos, 0) / tot)} dos eleitores</span></div>`; }).join("")}</div>
       <h4 class="sub">Onde foi o mais votado <small>${int(prim.length)}</small></h4><ol class="rank">${prim.slice(0, 40).map(([u]) => item(u, int(u.aptos) + " el.")).join("") || "<li class='nota'>Em nenhum lugar deste recorte.</li>"}</ol>`;
-    $("#ranking").innerHTML = html; return;
   }
   if (CATEG(m)) {
     const grupos = new Map();
     for (const u of lista) { const k = m === "venc26" ? NOME_EXIBE(u.venc26) : m === "venc22" ? NOME_EXIBE(u.venc22) : m === "virou" ? (u.virou ? "Mudou de lado" : "Manteve") : (u.melhor >= 0 ? `${E.deps[u.melhor].d.nome} ${E.deps[u.melhor].d.ano}` : "–"); const g = grupos.get(k) || {n: 0, el: 0, cor: corValor(u, m, [])}; g.n++; g.el += u.aptos; grupos.set(k, g); }
     const tot = lista.reduce((t, u) => t + u.aptos, 0);
-    html = `<h3 class="h3c">${esc(nome)}</h3><div class="cont">${[...grupos.entries()].sort((a, b) => b[1].n - a[1].n).map(([k, g]) => `<div class="cont-l"><i style="background:${g.cor}"></i><b>${esc(k)}</b><span>${int(g.n)} lugares · ${pct(g.el / tot)} dos eleitores</span></div>`).join("")}</div>`;
+    html = `<h3 class="h3c">${esc(nome)}</h3><div class="cont">${[...grupos.entries()].sort((a, b) => b[1].n - a[1].n).map(([k, g]) => `<div class="cont-l"><i style="background:${g.cor}"></i><b>${esc(k)}</b><span>${int(g.n)} ${onde} · ${pct(g.el / tot)} dos eleitores</span></div>`).join("")}</div>`;
     if (m === "virou") { const v = lista.filter(u => u.virou).sort((a, b) => b.aptos - a.aptos).slice(0, 12); html += `<h4 class="sub">Maiores que mudaram de lado</h4><ol class="rank">${v.map(u => item(u, `${esc(NOME_EXIBE(u.venc22))} → ${esc(NOME_EXIBE(u.venc26))}`)).join("")}</ol>`; }
-    else { const g = lista.slice().sort((a, b) => b.aptos - a.aptos).slice(0, 10); html += `<h4 class="sub">Maiores eleitorados</h4><ol class="rank">${g.map(u => item(u, `<span class="venc"><i style="background:${corValor(u, m, [])}"></i></span>${m === "venc22" ? pct(Math.max(u.lula22, u.bol22)) : pct(Math.max(u.lula26, u.bol26))}`)).join("")}</ol>`; }
-  } else {
-    const v = lista.filter(u => u[m] != null && isFinite(u[m])), alto = v.slice().sort((a, b) => b[m] - a[m]).slice(0, 10), baixo = v.slice().sort((a, b) => a[m] - b[m]).slice(0, 10);
-    html = `<h3 class="h3c">${esc(nome)}</h3><h4 class="sub">Maiores</h4><ol class="rank">${alto.map(u => item(u, fmtModo(m, u[m]))).join("")}</ol><h4 class="sub">Menores</h4><ol class="rank">${baixo.map(u => item(u, fmtModo(m, u[m]))).join("")}</ol>`;
+    else { const g = lista.slice().sort((a, b) => b.aptos - a.aptos).slice(0, 12); html += `<h4 class="sub">Maiores eleitorados</h4><ol class="rank">${g.map(u => item(u, `<span class="venc"><i style="background:${corValor(u, m, [])}"></i></span>${m === "venc22" ? pct(Math.max(u.lula22, u.bol22)) : pct(Math.max(u.lula26, u.bol26))}`)).join("")}</ol>`; }
+    return html;
   }
-  $("#ranking").innerHTML = html;
+  const v = lista.filter(u => u[m] != null && isFinite(u[m])), alto = v.slice().sort((a, b) => b[m] - a[m]).slice(0, 10), baixo = v.slice().sort((a, b) => a[m] - b[m]).slice(0, 10);
+  return `<h3 class="h3c">${esc(nome)}</h3><h4 class="sub">Maiores</h4><ol class="rank">${alto.map(u => item(u, fmtModo(m, u[m]))).join("")}</ol><h4 class="sub">Menores</h4><ol class="rank">${baixo.map(u => item(u, fmtModo(m, u[m]))).join("")}</ol>`;
 }
 $("#modoMapa").addEventListener("click", e => { const b = e.target.closest("[data-m]"); if (b) { E.modo = b.dataset.m; desenharMapa(); } });
 
@@ -698,10 +772,33 @@ function preencherBuscas() {
   $("#lUnidades").innerHTML = opts.sort((a, b) => a.localeCompare(b)).map(o => `<option value="${esc(o)}">`).join("");
   preencherDeps();
 }
-function preencherDeps() {
-  const l = E.B.deputados.filter(d => (!E.filtroCargo || d.cargo === E.filtroCargo) && (!E.filtroAno || d.ano === E.filtroAno));
-  $("#lDeps").innerHTML = l.map(d => `<option value="${esc(rotDep(d))}">${int(d.votos)} votos</option>`).join("");
+// busca de deputados com foto (lista própria, navegável pelo teclado)
+function preencherDeps() { if (document.activeElement === $("#qDep")) acDeps(); }
+let acSel = 0, acItens = [];
+function acDeps() {
+  const q = semAc($("#qDep").value.trim()), box = $("#acDeps");
+  acItens = E.B.deputados.filter(d => (!E.filtroCargo || d.cargo === E.filtroCargo) && (!E.filtroAno || d.ano === E.filtroAno) && (!q || semAc(d.nome).includes(q) || semAc(d.partido).startsWith(q))).slice(0, 40);
+  acSel = Math.min(acSel, Math.max(0, acItens.length - 1));
+  box.innerHTML = (q ? "" : `<div class="ac-cab">Mais votados${E.filtroCargo ? (E.filtroCargo === 6 ? " · federais" : " · estaduais") : ""}${E.filtroAno ? " · 20" + E.filtroAno : ""}</div>`)
+    + (acItens.map((d, i) => { const sel = E.deps.some(s => s.d.id === d.id);
+      return `<button type="button" class="ac-it${i === acSel ? " ativo" : ""}" role="option" aria-selected="${i === acSel}" data-ac="${i}">${avatar(d.foto, d.nome, "#2a333d", "av-c")}<span class="ac-t"><b>${esc(d.nome)}</b><small>${logo(d.partido)}${esc(d.partido)} · ${cargoNome(d.cargo)} 20${d.ano}${d.eleito ? ' · <em>eleito(a)</em>' : ""}</small></span><span class="ac-v"><b>${int(d.votos)}</b><small>votos</small></span>${sel ? '<i class="ac-ok">✓</i>' : ""}</button>`; }).join("")
+    || `<div class="ac-cab">Nenhum deputado encontrado${E.filtroCargo || E.filtroAno ? " com esses filtros" : ""}.</div>`);
+  box.hidden = false; $("#qDep").setAttribute("aria-expanded", "true");
+  box.querySelector(".ativo")?.scrollIntoView({block: "nearest"});
 }
+const acFechar = () => { $("#acDeps").hidden = true; $("#qDep").setAttribute("aria-expanded", "false"); };
+function acEscolher(i) { const d = acItens[i]; if (!d) return; $("#qDep").value = ""; acFechar(); $("#qDep").blur(); escolherDep(d); }
+$("#qDep").addEventListener("input", () => { acSel = 0; acDeps(); });
+$("#qDep").addEventListener("focus", () => acDeps());
+$("#qDep").addEventListener("keydown", e => {
+  if (e.key === "ArrowDown") { e.preventDefault(); acSel = Math.min(acItens.length - 1, acSel + 1); acDeps(); }
+  else if (e.key === "ArrowUp") { e.preventDefault(); acSel = Math.max(0, acSel - 1); acDeps(); }
+  else if (e.key === "Enter") { e.preventDefault(); acEscolher(acSel); }
+  else if (e.key === "Escape") acFechar();
+});
+$("#acDeps").addEventListener("mousedown", e => e.preventDefault());
+$("#acDeps").addEventListener("click", e => { e.preventDefault(); const b = e.target.closest("[data-ac]"); if (b) acEscolher(+b.dataset.ac); });
+$("#qDep").addEventListener("blur", () => setTimeout(acFechar, 120));
 $("#qUnidade").addEventListener("change", e => {
   const v = e.target.value, B = E.B, parte = v.split(" · ").slice(1).join(" · ");
   let nivel, chave;
@@ -711,17 +808,14 @@ $("#qUnidade").addEventListener("change", e => {
   if (!nivel || !chave) return;
   e.target.value = ""; e.target.blur(); abrir(nivel, chave);
 });
-$("#qDep").addEventListener("change", e => {
-  const d = E.B.deputados.find(x => rotDep(x) === e.target.value);
-  if (d) { e.target.value = ""; e.target.blur(); escolherDep(d); }
-});
+
 $("#filtroCargo").addEventListener("click", e => { const b = e.target.closest("[data-c]"); if (!b) return; E.filtroCargo = +b.dataset.c; $$("#filtroCargo button").forEach(x => x.setAttribute("aria-pressed", x === b)); preencherDeps(); });
 $("#filtroAno").addEventListener("click", e => { const b = e.target.closest("[data-a]"); if (!b) return; E.filtroAno = +b.dataset.a; $$("#filtroAno button").forEach(x => x.setAttribute("aria-pressed", x === b)); preencherDeps(); });
 
 /* ---------------- controles */
 const BOT_NIVEL = [["mun", "Cidades"], ["zona", "Zonas"], ["me", "Macrorregiões"], ["mi", "Microrregiões"], ["ri", "Regiões intermediárias"], ["rm", "Regiões imediatas"], ["mg", "Minas"]];
 function segNivel() { $$(".nivelSeg").forEach(el => el.innerHTML = BOT_NIVEL.map(([k, n]) => `<button data-n="${k}" aria-pressed="${E.nivel === k}">${n}</button>`).join("")); }
-document.addEventListener("click", e => { const b = e.target.closest(".nivelSeg [data-n]"); if (!b) return; E.nivel = b.dataset.n; segNivel(); E.unidades = agrupar(E.nivel); if (E.aba === "mapa") desenharMapa(); else tabela(); });
+document.addEventListener("click", e => { const b = e.target.closest(".nivelSeg [data-n]"); if (!b) return; E.nivel = b.dataset.n; segNivel(); E.unidades = agrupar(E.nivel); if (E.foco) { E.foco = null; E.voar = true; } if (E.aba === "mapa") desenharMapa(); else tabela(); });
 $("#turno").addEventListener("click", e => {
   const b = e.target.closest("[data-t]"); if (!b) return; E.turno = b.dataset.t; $$("#turno button").forEach(x => x.setAttribute("aria-pressed", x === b));
   const aba = E.aba; recalcular(); if (E.sel) abrir(E.sel.nivel, E.sel.chave); irAba(aba, false);
