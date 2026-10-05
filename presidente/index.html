@@ -35,46 +35,72 @@
 
   <section id="destaques" aria-label="Destaques"><div class="dest-grid" id="destGrid"><div class="carregando">Carregando os dados oficiais…</div></div></section>
 
-  <ol class="passos">
-    <li><b>1</b><div><strong>Escolha o recorte</strong><span>Minas, macrorregiões, regiões, zonas eleitorais ou cidades</span></div></li>
-    <li><b>2</b><div><strong>Busque um lugar</strong><span>Abre o comparativo completo, com os deputados mais votados ali</span></div></li>
-    <li><b>3</b><div><strong>Compare deputados</strong><span>Até 4, de 2022 ou 2026, entre si e com o voto para Presidente</span></div></li>
-  </ol>
-
   <div class="controles" id="controles">
-    <div class="grupo"><span class="rot">Ver por</span>
-      <div class="seg" id="nivel" role="group" aria-label="Ver por">
-        <button data-n="mg" aria-pressed="true">Minas</button><button data-n="me">Macrorregiões</button><button data-n="mi">Microrregiões</button><button data-n="ri">Regiões intermediárias</button><button data-n="rm">Regiões imediatas</button><button data-n="zona">Zonas</button><button data-n="mun">Cidades</button>
-      </div></div>
-    <div class="grupo"><span class="rot">2026 contra</span>
-      <div class="seg" id="turno" role="group" aria-label="Comparar 2026 com">
-        <button data-t="1" aria-pressed="true">2022 · 1º turno</button><button data-t="2">2022 · 2º turno</button>
-      </div></div>
-    <label class="busca grande"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-      <input id="qUnidade" list="lUnidades" placeholder="Buscar cidade, zona ou região…" autocomplete="off" aria-label="Buscar cidade, zona ou região"><datalist id="lUnidades"></datalist></label>
-    <nav class="secoes" aria-label="Seções"><a href="#geral">Quadro</a><a href="#mapaSec">Mapa</a><a href="#tabelaSec">Tabela</a><a href="#depSec">Deputados <span id="nDeps" class="bolinha" hidden></span></a></nav>
+    <nav class="abas" id="abas" role="tablist" aria-label="Seções">
+      <button role="tab" data-aba="geral" aria-selected="true">Visão geral</button>
+      <button role="tab" data-aba="mapa" aria-selected="false">Mapa</button>
+      <button role="tab" data-aba="regioes" aria-selected="false">Regiões</button>
+      <button role="tab" data-aba="tabela" aria-selected="false">Tabela</button>
+      <button role="tab" data-aba="deps" aria-selected="false">Deputados <span id="nDeps" class="bolinha" hidden></span></button>
+      <button role="tab" data-aba="lugar" aria-selected="false" id="abaLugar" hidden><span class="pin" aria-hidden="true"></span><span id="abaLugarNome">Lugar</span></button>
+    </nav>
+    <div class="barra">
+      <div class="grupo"><span class="rot">2026 contra</span>
+        <div class="seg" id="turno" role="group" aria-label="Comparar 2026 com">
+          <button data-t="1" aria-pressed="true">2022 · 1º turno</button><button data-t="2">2022 · 2º turno</button>
+        </div></div>
+      <label class="busca grande"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="qUnidade" list="lUnidades" placeholder="Buscar cidade, zona, macrorregião ou região…" autocomplete="off" aria-label="Buscar cidade, zona ou região"><datalist id="lUnidades"></datalist></label>
+    </div>
   </div>
 
-  <section id="geral">
-    <div class="sec-cab"><h2 id="geralTitulo">Minas Gerais: 2022 × 2026</h2><p>Todos os candidatos a Presidente nos dois anos e o que mudou. <b>p.p.</b> = pontos percentuais (a diferença entre dois %).</p></div>
-    <div id="quadro"></div><div id="geralTop"></div>
+  <!-- Visão geral -->
+  <section class="painel" id="p-geral" role="tabpanel">
+    <ol class="passos">
+      <li><b>1</b><div><strong>Navegue pelas abas</strong><span>Mapa, mapas de cada região, tabela completa e deputados</span></div></li>
+      <li><b>2</b><div><strong>Busque um lugar</strong><span>Cidade, zona ou região: abre o comparativo com mapa e mais votados</span></div></li>
+      <li><b>3</b><div><strong>Compare deputados</strong><span>Até 4, de 2022 ou 2026, entre si e com o voto para Presidente</span></div></li>
+    </ol>
+    <div class="sec-cab"><h2>Minas Gerais: 2022 × 2026</h2><p>Todos os candidatos a Presidente nos dois anos e o que mudou. <b>p.p.</b> = pontos percentuais (a diferença entre dois %).</p></div>
+    <div id="quadro"></div>
+    <div id="geralTop"></div>
+    <div class="sec-cab" style="margin-top:30px"><h2>Macrorregiões num relance</h2><p>Cada mapa mostra quem venceu em 2026 em cada cidade da macrorregião. Veja todas as regiões e microrregiões na aba <a href="#regioes" data-ir="regioes">Regiões</a>.</p></div>
+    <div id="geralRegioes" class="galeria"></div>
   </section>
-  <section id="detalhe" hidden>
-    <div class="sec-cab"><span class="selo">Lugar escolhido</span><h2 id="detTitulo"></h2><button class="btn" id="fecharDet">Fechar ×</button></div>
-    <div id="detCorpo"></div>
-  </section>
-  <section id="mapaSec">
+
+  <!-- Mapa -->
+  <section class="painel" id="p-mapa" role="tabpanel" hidden>
     <div class="sec-cab"><h2 id="mapaTitulo">Mapa</h2><p>Passe o mouse ou toque para ver os números. Clique para abrir o comparativo do lugar.</p></div>
-    <div class="seg rolar" id="modoMapa" role="group" aria-label="O que mostrar no mapa"></div>
-    <div class="mapa" id="mapa"></div><div class="legenda" id="legenda"></div>
+    <div class="linha-ctl"><span class="rot">Ver por</span><div class="seg nivelSeg" role="group" aria-label="Ver por"></div></div>
+    <div class="linha-ctl"><span class="rot">Pintar por</span><div class="seg rolar" id="modoMapa" role="group" aria-label="O que mostrar no mapa"></div></div>
+    <div class="mapa-grande">
+      <div><div class="mapa" id="mapa"></div><div class="legenda" id="legenda"></div></div>
+      <aside class="card ranking" id="ranking"></aside>
+    </div>
   </section>
-  <section id="tabelaSec">
+
+  <!-- Regiões -->
+  <section class="painel" id="p-regioes" role="tabpanel" hidden>
+    <div class="sec-cab"><h2>Mapas de cada região</h2><p>Um mapa para cada macrorregião, microrregião ou região, com as cidades pintadas. Clique num cartão para abrir o comparativo completo.</p></div>
+    <div class="linha-ctl"><span class="rot">Divisão</span><div class="seg" id="galNivel" role="group" aria-label="Divisão regional">
+      <button data-g="me" aria-pressed="true">Macrorregiões <small>12</small></button><button data-g="mi">Microrregiões <small>66</small></button><button data-g="ri">Regiões intermediárias <small>13</small></button><button data-g="rm">Regiões imediatas <small>70</small></button><button data-g="zona">Zonas eleitorais <small>304</small></button></div></div>
+    <div class="linha-ctl"><span class="rot">Pintar por</span><div class="seg rolar" id="galModo" role="group" aria-label="O que mostrar nos mapas"></div></div>
+    <div class="linha-ctl"><span class="rot">Ordenar</span><div class="seg" id="galOrdem" role="group" aria-label="Ordem"><button data-o="aptos" aria-pressed="true">Eleitores</button><button data-o="nome">Nome</button><button data-o="dLula">Maior queda do Lula</button><button data-o="bol26">Mais Flávio</button><button data-o="lula26">Mais Lula</button></div></div>
+    <div class="legenda" id="galLegenda"></div>
+    <div id="galeria" class="galeria"></div>
+  </section>
+
+  <!-- Tabela -->
+  <section class="painel" id="p-tabela" role="tabpanel" hidden>
     <div class="sec-cab"><h2 id="tabTitulo">Tabela</h2><p id="tabNota"></p></div>
-    <div class="ferr"><label class="busca"><input id="qTab" type="search" placeholder="Filtrar a tabela" aria-label="Filtrar a tabela"></label><button class="btn" id="csv">Baixar CSV</button><span class="nota">Clique no título de uma coluna para ordenar.</span></div>
+    <div class="linha-ctl"><span class="rot">Ver por</span><div class="seg nivelSeg" role="group" aria-label="Ver por"></div></div>
+    <div class="ferr"><label class="busca"><input id="qTab" type="search" placeholder="Filtrar a tabela" aria-label="Filtrar a tabela"></label><button class="btn" id="csv">Baixar CSV</button><span class="nota">Clique no título de uma coluna para ordenar. Clique numa linha para abrir o lugar.</span></div>
     <div class="tab-wrap" id="tabela"></div>
   </section>
-  <section id="depSec">
-    <div class="sec-cab"><h2>Deputados federais e estaduais · 2022 e 2026</h2><p>Escolha até <b>4 deputados</b>, de qualquer ano e cargo. Eles aparecem lado a lado, entram no mapa e na tabela e são cruzados com o voto para Presidente.</p></div>
+
+  <!-- Deputados -->
+  <section class="painel" id="p-deps" role="tabpanel" hidden>
+    <div class="sec-cab"><h2>Deputados federais e estaduais · 2022 e 2026</h2><p>Escolha até <b>4 deputados</b>, de qualquer ano e cargo. Eles aparecem lado a lado, entram nos mapas e na tabela e são cruzados com o voto para Presidente.</p></div>
     <div class="dep-busca card">
       <label class="busca grande"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>
         <input id="qDep" list="lDeps" placeholder="Digite o nome de um deputado…" autocomplete="off" aria-label="Escolher deputado"><datalist id="lDeps"></datalist></label>
@@ -84,6 +110,17 @@
     </div>
     <div id="depCorpo"></div>
   </section>
+
+  <!-- Lugar escolhido -->
+  <section class="painel" id="p-lugar" role="tabpanel" hidden>
+    <div class="sec-cab"><span class="selo" id="detTipo">Lugar escolhido</span><h2 id="detTitulo"></h2><p id="detSub"></p></div>
+    <div class="det-mapa card">
+      <div class="linha-ctl"><span class="rot">Pintar por</span><div class="seg rolar" id="detModo" role="group" aria-label="O que mostrar no mapa do lugar"></div></div>
+      <div class="mapa" id="detMapa"></div><div class="legenda" id="detLegenda"></div>
+    </div>
+    <div id="detCorpo"></div>
+  </section>
+
   <section id="fontes"><div class="sec-cab"><h2>Fontes e método</h2></div><div class="metodo" id="fontesTexto"></div></section>
   <footer>FONTE: TSE · RESULTADOS OFICIAIS 2022 (DADOS ABERTOS) E BOLETINS DE URNA 2026 · MOBI — MOBILIZAÇÃO INTELIGENTE</footer>
 </div>

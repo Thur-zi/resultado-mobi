@@ -1,8 +1,10 @@
 /* Presidente 2022 × 2026 em Minas Gerais — quadro comparativo por macrorregião, região, zona e cidade,
    cruzado com os deputados federais e estaduais de 2022 e 2026 (até 4 ao mesmo tempo).
-   Unidade básica dos dados: município + zona eleitoral ("mun-zona"); tudo é somado aqui no navegador. */
+   Unidade básica dos dados: município + zona eleitoral ("mun-zona"); tudo é somado aqui no navegador.
+   Abas: visão geral, mapa, mapas de cada região, tabela, deputados e o lugar escolhido. */
 "use strict";
 const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
 const nf = new Intl.NumberFormat("pt-BR");
 const int = v => v == null || !isFinite(v) ? "–" : nf.format(Math.round(v));
 const pct = (v, d = 1) => v == null || !isFinite(v) ? "–" : (v * 100).toLocaleString("pt-BR", {minimumFractionDigits: d, maximumFractionDigits: d}) + "%";
@@ -26,11 +28,13 @@ const avatar = (foto, nome, cor, cls = "av") => foto
   : `<span class="${cls}" style="background:${cor}">${esc(nome[0] || "")}</span>`;
 Chart.defaults.color = "#a7adb4"; Chart.defaults.font.family = "Inter Tight, system-ui, sans-serif";
 
-const E = {B: null, nivel: "mg", turno: "1", deps: [], filtroCargo: 0, filtroAno: 0, unidades: [], sel: null, modo: "venc26", mapa: null, camada: null, geo: null, graficos: [], topAno: "26"};
+const E = {B: null, nivel: "mun", turno: "1", deps: [], filtroCargo: 0, filtroAno: 0, unidades: [], sel: null, modo: "venc26", mapa: null, camada: null, geo: null, graficos: [], topAno: "26",
+  aba: "geral", galNivel: "me", galModo: "venc26", galOrdem: "aptos", detModo: "venc26", detMapa: null, detCamada: null};
 const NIVEIS = {mg: "Minas Gerais", me: "Macrorregiões", mi: "Microrregiões", ri: "Regiões intermediárias", rm: "Regiões imediatas", zona: "Zonas eleitorais", mun: "Cidades"};
+const NIVEL1 = {mg: "Estado", me: "Macrorregião", mi: "Microrregião", ri: "Região intermediária", rm: "Região imediata", zona: "Zona eleitoral", mun: "Cidade"};
 const REGIAO = n => ["me", "mi", "ri", "rm"].includes(n);
 
-function toast(t) { const el = $("#toast"); el.innerHTML = t; el.classList.add("on"); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove("on"), 3200); }
+function toast(t) { const el = $("#toast"); el.innerHTML = t; el.classList.add("on"); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove("on"), 3600); }
 
 /* ---------------- agregação */
 function validos(d) { const B = E.B; return d.ano === 26 ? (d.cargo === 6 ? B.val6 : B.val7) : (d.cargo === 6 ? B.val6_22 : B.val7_22); }
@@ -69,15 +73,21 @@ function chaveDe(nivel, k) {
   if (nivel === "zona") return [z, E.B.zonas[z]?.nome || `Zona ${z}`];
   return [m, mun?.nome || m];
 }
+const todasMz = () => [...new Set([...Object.keys(E.B.v26), ...Object.keys(E.B.v22[E.turno])])];
+// cache por nível; invalidado quando muda o turno ou os deputados
+let CACHE = {};
 function agrupar(nivel) {
-  const B = E.B, grupos = new Map();
-  for (const k of new Set([...Object.keys(B.v26), ...Object.keys(B.v22[E.turno])])) {
+  if (CACHE[nivel]) return CACHE[nivel];
+  const grupos = new Map();
+  for (const k of todasMz()) {
     const [chave, nome] = chaveDe(nivel, k);
-    if (!grupos.has(chave)) grupos.set(chave, {chave, nome, mzs: []});
+    if (!grupos.has(chave)) grupos.set(chave, {chave, nome, nivel, mzs: []});
     grupos.get(chave).mzs.push(k);
   }
-  return [...grupos.values()].map(g => Object.assign(g, somar(g.mzs), maisVotados(nivel, g.chave)));
+  return CACHE[nivel] = [...grupos.values()].map(g => Object.assign(g, somar(g.mzs), maisVotados(nivel, g.chave)));
 }
+const unidade = (nivel, chave) => agrupar(nivel).find(u => u.chave === chave);
+const cidadesDe = u => [...new Set(u.mzs.map(k => k.split("-")[0]))];
 // deputado mais votado de cada cargo e ano num lugar: {f26: [deputado, votos], e26, f22, e22}
 function maisVotados(nivel, chave) {
   const g = E.top?.[nivel === "mg" ? "mg" : `${nivel}:${chave}`] || {}, o = {};
@@ -85,7 +95,21 @@ function maisVotados(nivel, chave) {
   return o;
 }
 const celTop = x => x ? `<span class="topcel">${avatar(x[0].foto, x[0].nome, "#2a333d", "av-m")}<span>${esc(x[0].nome)} <small>${esc(x[0].partido)} · ${int(x[1])}</small></span></span>` : "–";
-const todasMz = () => [...new Set([...Object.keys(E.B.v26), ...Object.keys(E.B.v22[E.turno])])];
+
+/* ---------------- abas */
+function irAba(aba, rolar = true) {
+  E.aba = aba;
+  $$("#abas [data-aba]").forEach(b => b.setAttribute("aria-selected", b.dataset.aba === aba));
+  $$(".painel").forEach(p => p.hidden = p.id !== "p-" + aba);
+  if (history.replaceState) history.replaceState(null, "", "#" + aba);
+  if (aba === "mapa") desenharMapa();
+  if (aba === "regioes") galeria();
+  if (aba === "tabela") tabela();
+  if (aba === "lugar") desenharDetMapa();
+  if (rolar) { const y = $("#controles").getBoundingClientRect().top + scrollY - 4; if (scrollY > y) scrollTo({top: y, behavior: "smooth"}); }
+}
+$("#abas").addEventListener("click", e => { const b = e.target.closest("[data-aba]"); if (b) irAba(b.dataset.aba); });
+document.addEventListener("click", e => { const a = e.target.closest("[data-ir]"); if (a) { e.preventDefault(); irAba(a.dataset.ir); $("#toast").classList.remove("on"); } });
 
 /* ---------------- destaques (Minas) */
 function destaques() {
@@ -93,18 +117,18 @@ function destaques() {
   const t22 = E.turno === "1" ? "1º turno de 2022" : "2º turno de 2022";
   const l2b = cid.filter(c => familia(c.venc22) === "lula" && familia(c.venc26) === "bolso").length;
   const b2l = cid.filter(c => familia(c.venc22) === "bolso" && familia(c.venc26) === "lula").length;
-  const grandes = cid.filter(c => c.aptos >= 50000);
-  const maxB = grandes.slice().sort((a, b) => b.dBol - a.dBol)[0];
+  const maxB = cid.filter(c => c.aptos >= 50000).sort((a, b) => b.dBol - a.dBol)[0];
   const meL = me.slice().sort((a, b) => a.dLula - b.dLula)[0], meM = me.slice().sort((a, b) => b.dLula - a.dLula)[0];
-  const margem = mg.bol26 - mg.lula26;
+  const abre = (u) => `data-abrir="${u.nivel}|${esc(u.chave)}"`;
   $("#destGrid").innerHTML = `
-    <div class="dest forte"><span class="dl">Quem venceu em Minas em 2026</span><b>${esc(NOME_EXIBE(mg.venc26))}</b><span>${pct(mg.bol26)} contra ${pct(mg.lula26)} do Lula · ${margem > 0 ? "vantagem" : "diferença"} de ${int(Math.abs((mg.v26[FB] || 0) - (mg.v26[LULA] || 0)))} votos</span></div>
+    <div class="dest forte"><span class="dl">Quem venceu em Minas em 2026</span><b>${esc(NOME_EXIBE(mg.venc26))}</b><span>${pct(mg.bol26)} contra ${pct(mg.lula26)} do Lula · diferença de ${int(Math.abs((mg.v26[FB] || 0) - (mg.v26[LULA] || 0)))} votos</span></div>
     <div class="dest"><span class="dl">Lula em Minas · ${t22} → 2026</span><b class="${mg.dLula > 0 ? "pos" : "neg"}">${pp(mg.dLula)}</b><span>${pct(mg.lula22)} → ${pct(mg.lula26)}</span></div>
     <div class="dest"><span class="dl">Bolsonaro · Jair (2022) → Flávio (2026)</span><b class="${mg.dBol > 0 ? "pos" : "neg"}">${pp(mg.dBol)}</b><span>${pct(mg.bol22)} → ${pct(mg.bol26)}</span></div>
-    <div class="dest"><span class="dl">Cidades que mudaram de lado</span><b>${int(l2b + b2l)} <small>de ${int(cid.length)}</small></b><span>${int(l2b)} saíram do Lula para o Flávio · ${int(b2l)} do Bolsonaro para o Lula</span></div>
-    <div class="dest"><span class="dl">Onde o Lula mais caiu</span><b>${esc(meL.nome)}</b><span>${pp(meL.dLula)} · onde menos caiu: ${esc(meM.nome)} (${pp(meM.dLula)})</span></div>
-    ${maxB ? `<div class="dest"><span class="dl">Maior avanço do Flávio sobre o Jair <small>(cidades com 50 mil+ eleitores)</small></span><b>${esc(maxB.nome)}</b><span>${pp(maxB.dBol)} · ${pct(maxB.bol22)} → ${pct(maxB.bol26)}</span></div>` : ""}`;
+    <button class="dest" data-ir="mapa"><span class="dl">Cidades que mudaram de lado</span><b>${int(l2b + b2l)} <small>de ${int(cid.length)}</small></b><span>${int(l2b)} saíram do Lula para o Flávio · ${int(b2l)} do Bolsonaro para o Lula</span></button>
+    <button class="dest" ${abre(meL)}><span class="dl">Macrorregião onde o Lula mais caiu</span><b>${esc(meL.nome)}</b><span>${pp(meL.dLula)} · onde menos caiu: ${esc(meM.nome)} (${pp(meM.dLula)})</span></button>
+    ${maxB ? `<button class="dest" ${abre(maxB)}><span class="dl">Maior avanço do Flávio sobre o Jair <small>(cidades com 50 mil+ eleitores)</small></span><b>${esc(maxB.nome)}</b><span>${pp(maxB.dBol)} · ${pct(maxB.bol22)} → ${pct(maxB.bol26)}</span></button>` : ""}`;
 }
+document.addEventListener("click", e => { const a = e.target.closest("[data-abrir]"); if (a) { const [n, ...c] = a.dataset.abrir.split("|"); abrir(n, c.join("|")); } });
 
 /* ---------------- quadro de uma unidade */
 function listaCand(v, tot, fotos, n = 12) {
@@ -127,6 +151,103 @@ function quadro(u, alvo) {
       <div class="card"><div class="l">Votos válidos</div><div class="v txt">${int(u.t22)} → ${int(u.t26)}</div><div class="s">para Presidente · ${int(u.aptos)} eleitores</div></div>
     </div>`;
 }
+
+/* ---------------- cores e legendas (compartilhadas por todos os mapas) */
+const MODOS = () => [["venc26", "Vencedor 2026"], ["venc22", "Vencedor 2022"], ["virou", "Mudou de lado"], ["dLula", "Δ Lula"], ["dBol", "Δ Bolsonaro"], ["lula26", "Lula 2026"], ["bol26", "Flávio 2026"], ["lula22", "Lula 2022"], ["bol22", "Jair 2022"], ["abst26", "Abstenção 2026"]]
+  .concat(E.deps.map((s, j) => ["dp" + j, `${s.d.nome} ${s.d.ano}`])).concat(E.deps.length > 1 ? [["melhor", "Qual deputado foi melhor"]] : []);
+const mistura = (c, t) => { const a = parseInt(c.slice(1), 16), b = 0x11171d; const r = s => Math.round(((b >> s) & 255) * (1 - t) + ((a >> s) & 255) * t); return `rgb(${r(16)},${r(8)},${r(0)})`; };
+const rampa = c => [.18, .36, .56, .78, 1].map(t => mistura(c, t));
+const RAMPAS = {lula: rampa(COR.lula), bolso: rampa(COR.bolso), cinza: rampa("#9aa6b2")};
+const DIV = ["#215c8c", "#4f93cc", "#8a96a3", "#e48a76", "#c4503e"];
+function quebras(vals) { const v = vals.filter(x => x != null && isFinite(x)).sort((a, b) => a - b); return [0.2, 0.4, 0.6, 0.8].map(q => v[Math.floor(q * (v.length - 1))]); }
+const rampaDo = modo => /^dp\d/.test(modo) ? rampa(E.deps[+modo.slice(2)].cor) : /lula/.test(modo) ? RAMPAS.lula : /bol/.test(modo) ? RAMPAS.bolso : RAMPAS.cinza;
+const CATEG = m => ["venc26", "venc22", "virou", "melhor"].includes(m);
+function corValor(u, modo, q) {
+  if (!u) return "#1a2129";
+  if (modo === "venc26") return corCand(u.venc26);
+  if (modo === "venc22") return corCand(u.venc22);
+  if (modo === "virou") return u.virou ? "#fab219" : "#2a333d";
+  if (modo === "melhor") return u.melhor >= 0 ? E.deps[u.melhor].cor : "#1a2129";
+  const x = u[modo]; if (x == null || !isFinite(x)) return "#1a2129";
+  if (modo === "dLula" || modo === "dBol") { const i = q.filter(t => x > t).length; return modo === "dLula" ? DIV[i] : DIV[4 - i]; }
+  return rampaDo(modo)[q.filter(t => x > t).length];
+}
+const fmtModo = (modo, x) => modo === "dLula" || modo === "dBol" ? pp(x) : pct(x, /^dp/.test(modo) ? 2 : 1);
+function legenda(modo, q) {
+  if (modo === "venc26" || modo === "venc22") return `<span><b style="background:${COR.lula}"></b>Lula</span><span><b style="background:${COR.bolso}"></b>${modo === "venc22" ? "Jair Bolsonaro" : "Flávio Bolsonaro"}</span><span><b style="background:${COR.outro}"></b>outro</span>`;
+  if (modo === "virou") return `<span><b style="background:#fab219"></b>mudou de lado</span><span><b style="background:#2a333d"></b>manteve</span>`;
+  if (modo === "melhor") return E.deps.map(s => `<span><b style="background:${s.cor}"></b>${esc(s.d.nome)} ${s.d.ano}</span>`).join("") + `<span class="nota">(maior % dos válidos do próprio cargo)</span>`;
+  const c = modo === "dLula" ? DIV : modo === "dBol" ? DIV.slice().reverse() : rampaDo(modo), f = x => fmtModo(modo, x);
+  return c.map((cor, i) => `<span><b style="background:${cor}"></b>${i === 0 ? "até " + f(q[0]) : i === 4 ? "acima de " + f(q[3]) : f(q[i - 1]) + " a " + f(q[i])}</span>`).join("") + `<span class="nota">(5 faixas com o mesmo número de lugares)</span>`;
+}
+function dica(u) {
+  return `<b>${esc(u.nome)}</b><br>2022: Lula ${pct(u.lula22)} · Jair ${pct(u.bol22)}<br>2026: Lula ${pct(u.lula26)} · Flávio ${pct(u.bol26)}<br>Δ Lula ${pp(u.dLula)} · Δ Bolsonaro ${pp(u.dBol)}${u.virou ? " · <b style='color:#fab219'>mudou de lado</b>" : ""}`
+    + (u.f26 ? `<br>Mais votados 2026: <b>${esc(u.f26[0].nome)}</b> (fed.) · <b>${esc(u.e26?.[0].nome)}</b> (est.)` : "")
+    + (u.f22 ? `<br>Mais votados 2022: ${esc(u.f22[0].nome)} (fed.) · ${esc(u.e22?.[0].nome)} (est.)` : "")
+    + E.deps.map((s, j) => `<br><i style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${s.cor}"></i> ${esc(s.d.nome)} ${s.d.ano}: ${int(u["dv" + j])} votos (${pct(u["dp" + j], 2)})`).join("");
+}
+const botoesModo = (sel, atual) => { $(sel).innerHTML = MODOS().map(([k, n]) => { const j = /^dp(\d)/.exec(k); return `<button data-m="${k}" aria-pressed="${atual === k}">${j ? `<i class="pt" style="background:${E.deps[+j[1]].cor}"></i>` : ""}${esc(n)}</button>`; }).join(""); };
+const validaModo = m => MODOS().some(x => x[0] === m) ? m : "venc26";
+
+/* ---------------- mapinhas em SVG (galeria de regiões) */
+function prepararGeo() {
+  const k = Math.cos(18.5 * Math.PI / 180);
+  E.pth = new Map(); E.bb = new Map();
+  let X0 = 1e9, X1 = -1e9, Y0 = 1e9, Y1 = -1e9;
+  for (const f of E.geo.features) {
+    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+    const anel = a => "M" + a.map(([x, y]) => { const X = x * k * 100, Y = -y * 100; if (X < x0) x0 = X; if (X > x1) x1 = X; if (Y < y0) y0 = Y; if (Y > y1) y1 = Y; return X.toFixed(1) + "," + Y.toFixed(1); }).join("L") + "Z";
+    const g = f.geometry, d = (g.type === "Polygon" ? [g.coordinates] : g.coordinates).map(p => p.map(anel).join("")).join("");
+    E.pth.set(f.properties.ibge, d); E.bb.set(f.properties.ibge, [x0, y0, x1, y1]);
+    X0 = Math.min(X0, x0); X1 = Math.max(X1, x1); Y0 = Math.min(Y0, y0); Y1 = Math.max(Y1, y1);
+  }
+  E.vbMG = `${X0 - 4} ${Y0 - 4} ${X1 - X0 + 8} ${Y1 - Y0 + 8}`;
+  // Minas inteira num só desenho, reaproveitado pelos mapinhas de localização
+  document.body.insertAdjacentHTML("beforeend", `<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><path id="mgTodo" d="${[...E.pth.values()].join("")}"/></defs></svg>`);
+}
+const ibgeDe = m => E.B.municipios[m]?.ibge;
+function miniSvg(itens, cls = "mini-mapa") {
+  let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+  for (const it of itens) { const b = E.bb.get(it.ibge); if (!b) continue; x0 = Math.min(x0, b[0]); y0 = Math.min(y0, b[1]); x1 = Math.max(x1, b[2]); y1 = Math.max(y1, b[3]); }
+  const pad = Math.max(x1 - x0, y1 - y0) * .05;
+  return `<svg class="${cls}" viewBox="${(x0 - pad).toFixed(1)} ${(y0 - pad).toFixed(1)} ${(x1 - x0 + 2 * pad).toFixed(1)} ${(y1 - y0 + 2 * pad).toFixed(1)}" preserveAspectRatio="xMidYMid meet" role="img">${itens.map(it => `<path d="${E.pth.get(it.ibge) || ""}" fill="${it.cor}"><title>${esc(it.titulo)}</title></path>`).join("")}</svg>`;
+}
+const localizador = ibges => `<svg class="loc" viewBox="${E.vbMG}" aria-hidden="true"><use href="#mgTodo" fill="#2a333d"/><path d="${ibges.map(i => E.pth.get(i) || "").join("")}" fill="${COR.brand}"/></svg>`;
+function cartaoRegiao(u, modo, q, cidMap) {
+  const muns = cidadesDe(u);
+  const itens = muns.map(m => { const c = cidMap.get(m); return {ibge: ibgeDe(m), cor: corValor(c, modo, q), titulo: c ? `${c.nome}: Lula ${pct(c.lula26)} · Flávio ${pct(c.bol26)}` : ""}; });
+  const viraram = muns.filter(m => cidMap.get(m)?.virou).length, nLula = muns.filter(m => familia(cidMap.get(m)?.venc26) === "lula").length;
+  const barra = (a, b, ca, cb) => `<div class="duo"><i style="width:${a * 100}%;background:${ca}"></i><i style="width:${b * 100}%;background:${cb}"></i></div>`;
+  return `<button class="card regiao" data-abrir="${u.nivel}|${esc(u.chave)}">
+    <div class="rg-cab"><div><b>${esc(u.nivel === "me" ? u.nome : u.nome.replace(/^(Microrregião|Região intermediária|Região imediata) de /, ""))}</b><small>${int(muns.length)} ${muns.length === 1 ? "cidade" : "cidades"} · ${int(u.aptos)} eleitores</small></div>${localizador(muns.map(ibgeDe))}</div>
+    ${miniSvg(itens)}
+    <div class="rg-venc"><span class="venc"><i style="background:${corCand(u.venc26)}"></i>${esc(NOME_EXIBE(u.venc26))}</span>${u.virou ? '<span class="virou">virou</span>' : ""}</div>
+    <div class="rg-linha"><span>2026</span>${barra(u.lula26, u.bol26, COR.lula, COR.bolso)}<small>Lula ${pct(u.lula26)} · Flávio ${pct(u.bol26)}</small></div>
+    <div class="rg-linha"><span>2022</span>${barra(u.lula22, u.bol22, COR.lula, COR.bolso)}<small>Lula ${pct(u.lula22)} · Jair ${pct(u.bol22)}</small></div>
+    <div class="rg-chips"><span class="${u.dLula > 0 ? "pos" : "neg"}">Lula ${pp(u.dLula)}</span><span class="${u.dBol > 0 ? "pos" : "neg"}">Bolsonaro ${pp(u.dBol)}</span><span>${int(nLula)} de ${int(muns.length)} com Lula</span>${viraram ? `<span class="am">${int(viraram)} viraram</span>` : ""}</div>
+    ${u.f26 ? `<div class="rg-top"><span>Mais votados 2026</span>${celTop(u.f26)}${celTop(u.e26)}</div>` : ""}
+    ${E.deps.length ? `<div class="rg-deps">${E.deps.map((s, j) => `<span><i style="background:${s.cor}"></i>${esc(s.d.nome)} ${s.d.ano}: <b>${pct(u["dp" + j], 2)}</b></span>`).join("")}</div>` : ""}
+  </button>`;
+}
+function galeria() {
+  E.galModo = validaModo(E.galModo); botoesModo("#galModo", E.galModo);
+  const cid = agrupar("mun"), cidMap = new Map(cid.map(c => [c.chave, c])), q = quebras(cid.map(c => c[E.galModo]));
+  const o = E.galOrdem, lista = agrupar(E.galNivel).slice().sort((a, b) => o === "nome" ? a.nome.localeCompare(b.nome) : o === "dLula" ? a.dLula - b.dLula : (b[o] - a[o]));
+  $("#galLegenda").innerHTML = `<span class="nota">Cidades pintadas por <strong>${esc(MODOS().find(m => m[0] === E.galModo)[1])}</strong>:</span>` + legenda(E.galModo, q);
+  // desenha em lotes para a página não travar (zonas e regiões imediatas têm muitos cartões)
+  const alvo = $("#galeria"), vez = (E.galVez = (E.galVez || 0) + 1);
+  alvo.innerHTML = "";
+  let i = 0;
+  const lote = () => { if (vez !== E.galVez) return; alvo.insertAdjacentHTML("beforeend", lista.slice(i, i + 24).map(u => cartaoRegiao(u, E.galModo, q, cidMap)).join("")); i += 24; if (i < lista.length) requestAnimationFrame(lote); };
+  lote();
+}
+function galeriaGeral() {
+  const cid = agrupar("mun"), cidMap = new Map(cid.map(c => [c.chave, c])), q = quebras(cid.map(c => c.venc26));
+  $("#geralRegioes").innerHTML = agrupar("me").slice().sort((a, b) => b.aptos - a.aptos).map(u => cartaoRegiao(u, "venc26", q, cidMap)).join("");
+}
+$("#galNivel").addEventListener("click", e => { const b = e.target.closest("[data-g]"); if (!b) return; E.galNivel = b.dataset.g; $$("#galNivel button").forEach(x => x.setAttribute("aria-pressed", x === b)); galeria(); });
+$("#galModo").addEventListener("click", e => { const b = e.target.closest("[data-m]"); if (b) { E.galModo = b.dataset.m; galeria(); } });
+$("#galOrdem").addEventListener("click", e => { const b = e.target.closest("[data-o]"); if (!b) return; E.galOrdem = b.dataset.o; $$("#galOrdem button").forEach(x => x.setAttribute("aria-pressed", x === b)); galeria(); });
 
 /* ---------------- tabela */
 let ord = {k: "aptos", dir: -1}, filtroTab = "";
@@ -151,12 +272,12 @@ function tabela() {
     <tbody>${linhas.map(u => `<tr data-ch="${esc(u.chave)}">${cols.map(c => `<td>${c.f(u)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
   $("#tabTitulo").textContent = `Tabela · ${NIVEIS[E.nivel]} (${int(E.unidades.length)})`;
   const viraram = E.unidades.filter(u => u.virou).length;
-  $("#tabNota").innerHTML = E.nivel === "mg" ? "Escolha um recorte em <b>Ver por</b> para listar cidades, zonas ou regiões." : `<b>${int(viraram)} de ${int(E.unidades.length)}</b> mudaram de lado entre o ${E.turno === "1" ? "1º" : "2º"} turno de 2022 e 2026. Clique numa linha para abrir o comparativo.`;
+  $("#tabNota").innerHTML = E.nivel === "mg" ? "Escolha um recorte em <b>Ver por</b> para listar cidades, zonas ou regiões." : `<b>${int(viraram)} de ${int(E.unidades.length)}</b> mudaram de lado entre o ${E.turno === "1" ? "1º" : "2º"} turno de 2022 e 2026.`;
 }
 $("#tabela").addEventListener("click", e => {
   const th = e.target.closest("th[data-k]");
   if (th) { if (ord.k === th.dataset.k) ord.dir = -ord.dir; else ord = {k: th.dataset.k, dir: -1}; return tabela(); }
-  const tr = e.target.closest("tr[data-ch]"); if (tr) abrir(tr.dataset.ch);
+  const tr = e.target.closest("tr[data-ch]"); if (tr) abrir(E.nivel, tr.dataset.ch);
 });
 $("#qTab").addEventListener("input", e => { filtroTab = semAc(e.target.value); tabela(); });
 $("#csv").addEventListener("click", () => {
@@ -165,85 +286,73 @@ $("#csv").addEventListener("click", () => {
   Object.assign(document.createElement("a"), {href: URL.createObjectURL(new Blob(["﻿" + linhas.join("\n")], {type: "text/csv"})), download: `presidente-mg-${E.nivel}.csv`}).click();
 });
 
-/* ---------------- mapa */
-const MODOS = () => [["venc26", "Vencedor 2026"], ["venc22", "Vencedor 2022"], ["virou", "Mudou de lado"], ["dLula", "Δ Lula"], ["dBol", "Δ Bolsonaro"], ["lula26", "Lula 2026"], ["bol26", "Flávio 2026"], ["lula22", "Lula 2022"], ["bol22", "Jair 2022"], ["abst26", "Abstenção 2026"]]
-  .concat(E.deps.map((s, j) => ["dp" + j, `${s.d.nome} ${s.d.ano}`])).concat(E.deps.length > 1 ? [["melhor", "Qual deputado foi melhor"]] : []);
-const mistura = (c, t) => { const a = parseInt(c.slice(1), 16), b = 0x11171d; const r = (x, s) => Math.round(((b >> s) & 255) * (1 - t) + ((x >> s) & 255) * t); return `rgb(${r(a, 16)},${r(a, 8)},${r(a, 0)})`; };
-const rampa = c => [.18, .36, .56, .78, 1].map(t => mistura(c, t));
-const RAMPAS = {lula: rampa(COR.lula), bolso: rampa(COR.bolso), cinza: rampa("#9aa6b2")};
-const DIV = ["#215c8c", "#4f93cc", "#8a96a3", "#e48a76", "#c4503e"];
-function quebras(vals) { const v = vals.filter(x => x != null && isFinite(x)).sort((a, b) => a - b); return [0.2, 0.4, 0.6, 0.8].map(q => v[Math.floor(q * (v.length - 1))]); }
-const rampaDo = modo => /^dp\d/.test(modo) ? rampa(E.deps[+modo.slice(2)].cor) : /lula/.test(modo) ? RAMPAS.lula : /bol/.test(modo) ? RAMPAS.bolso : RAMPAS.cinza;
-function corValor(u, modo, q) {
-  if (!u) return "#1a2129";
-  if (modo === "venc26") return corCand(u.venc26);
-  if (modo === "venc22") return corCand(u.venc22);
-  if (modo === "virou") return u.virou ? "#fab219" : "#2a333d";
-  if (modo === "melhor") return u.melhor >= 0 ? E.deps[u.melhor].cor : "#1a2129";
-  const x = u[modo]; if (x == null || !isFinite(x)) return "#1a2129";
-  if (modo === "dLula" || modo === "dBol") { const i = q.filter(t => x > t).length; return modo === "dLula" ? DIV[i] : DIV[4 - i]; }
-  return rampaDo(modo)[q.filter(t => x > t).length];
-}
-function legenda(modo, q) {
-  const f = x => pct(x, /^dp/.test(modo) ? 2 : 1);
-  if (modo === "venc26" || modo === "venc22") return `<span><b style="background:${COR.lula}"></b>Lula</span><span><b style="background:${COR.bolso}"></b>${modo === "venc22" ? "Jair Bolsonaro" : "Flávio Bolsonaro"}</span><span><b style="background:${COR.outro}"></b>outro</span>`;
-  if (modo === "virou") return `<span><b style="background:#fab219"></b>mudou de lado</span><span><b style="background:#2a333d"></b>manteve</span>`;
-  if (modo === "melhor") return E.deps.map(s => `<span><b style="background:${s.cor}"></b>${esc(s.d.nome)} ${s.d.ano}</span>`).join("") + `<span class="nota">(maior % dos válidos do próprio cargo)</span>`;
-  if (modo === "dLula" || modo === "dBol") { const c = modo === "dLula" ? DIV : DIV.slice().reverse(); return c.map((cor, i) => `<span><b style="background:${cor}"></b>${i === 0 ? "até " + pp(q[0]) : i === 4 ? "acima de " + pp(q[3]) : pp(q[i - 1]) + " a " + pp(q[i])}</span>`).join("") + `<span class="nota">(cinco faixas com o mesmo número de lugares)</span>`; }
-  return rampaDo(modo).map((c, i) => `<span><b style="background:${c}"></b>${i === 0 ? "até " + f(q[0]) : i === 4 ? "acima de " + f(q[3]) : f(q[i - 1]) + " – " + f(q[i])}</span>`).join("");
-}
-function dica(u) {
-  return `<b>${esc(u.nome)}</b><br>2022: Lula ${pct(u.lula22)} · Jair ${pct(u.bol22)}<br>2026: Lula ${pct(u.lula26)} · Flávio ${pct(u.bol26)}<br>Δ Lula ${pp(u.dLula)} · Δ Bolsonaro ${pp(u.dBol)}`
-    + (u.f26 ? `<br>Mais votados 2026: <b>${esc(u.f26[0].nome)}</b> (federal) · <b>${esc(u.e26?.[0].nome)}</b> (estadual)` : "")
-    + (u.f22 ? `<br>Mais votados 2022: ${esc(u.f22[0].nome)} (federal) · ${esc(u.e22?.[0].nome)} (estadual)` : "")
-    + E.deps.map((s, j) => `<br><i style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${s.cor}"></i> ${esc(s.d.nome)} ${s.d.ano}: ${int(u["dv" + j])} votos (${pct(u["dp" + j], 2)})`).join("");
+/* ---------------- mapa grande */
+function novoMapa(id) {
+  const m = L.map(id, {scrollWheelZoom: false, zoomSnap: .25, preferCanvas: true});
+  L.tileLayer("https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", {attribution: "Esri · IBGE · TSE", maxZoom: 14}).addTo(m);
+  m.on("click focus", () => m.scrollWheelZoom.enable());
+  m.setView([-18.6, -44.6], 6);
+  // o mapa pode nascer escondido (aba fechada); reenquadra quando ganhar tamanho
+  let larg = 0;
+  new ResizeObserver(() => { const w = $("#" + id).clientWidth; if (w && Math.abs(w - larg) > 40) { larg = w; m.invalidateSize(); if (m._limites) m.fitBounds(m._limites); } }).observe($("#" + id));
+  return m;
 }
 function desenharMapa() {
-  if (!E.mapa) {
-    E.mapa = L.map("mapa", {scrollWheelZoom: false, zoomSnap: .25, preferCanvas: true});
-    L.tileLayer("https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", {attribution: "Esri · IBGE · TSE", maxZoom: 14}).addTo(E.mapa);
-    E.mapa.on("click focus", () => E.mapa.scrollWheelZoom.enable());
-    E.mapa.setView([-18.6, -44.6], 6);
-    // o mapa pode nascer com largura zero (aba escondida); reenquadra quando ganhar tamanho
-    let larg = 0;
-    new ResizeObserver(() => { const w = $("#mapa").clientWidth; if (w && Math.abs(w - larg) > 40) { larg = w; E.mapa.invalidateSize(); if (E.limites) E.mapa.fitBounds(E.limites); } }).observe($("#mapa"));
-  }
+  if (E.aba !== "mapa") return;
+  if (!E.mapa) E.mapa = novoMapa("mapa");
   if (E.camada) E.camada.remove();
-  const modos = MODOS(); if (!modos.some(m => m[0] === E.modo)) E.modo = "venc26";
-  $("#modoMapa").innerHTML = modos.map(([k, n]) => { const j = /^dp(\d)/.exec(k); return `<button data-m="${k}" aria-pressed="${E.modo === k}">${j ? `<i class="pt" style="background:${E.deps[+j[1]].cor}"></i>` : ""}${esc(n)}</button>`; }).join("");
+  E.modo = validaModo(E.modo); botoesModo("#modoMapa", E.modo);
   // cor de cada município: a da unidade que o contém (região) ou a da própria cidade
   const unidadeDe = new Map();
   const nivelMapa = E.nivel === "mg" || E.nivel === "zona" ? "mun" : E.nivel;
-  const lista = nivelMapa === E.nivel ? E.unidades : agrupar(nivelMapa);
+  const lista = agrupar(nivelMapa);
   for (const u of lista) for (const k of u.mzs) unidadeDe.set(k.split("-")[0], u);
   const porIbge = new Map(Object.entries(E.B.municipios).map(([m, x]) => [x.ibge, unidadeDe.get(m)]));
   const q = quebras(lista.map(u => u[E.modo]));
   const grupo = L.featureGroup(), regiao = REGIAO(E.nivel);
   L.geoJSON(E.geo, {style: f => ({color: regiao ? "rgba(11,16,21,.35)" : "#0b1015", weight: regiao ? .2 : .4, fillOpacity: E.nivel === "zona" ? .25 : .9, fillColor: corValor(porIbge.get(f.properties.ibge), E.modo, q)}),
-    onEachFeature: (f, l) => { const u = porIbge.get(f.properties.ibge); if (!u) return; l.bindTooltip(dica(u), {sticky: true}); l.on("click", () => abrir(u.chave)); }}).addTo(grupo);
+    onEachFeature: (f, l) => { const u = porIbge.get(f.properties.ibge); if (!u) return; l.bindTooltip(dica(u), {sticky: true}); l.on("click", () => abrir(u.nivel, u.chave)); }}).addTo(grupo);
+  let listaRank = lista;
   if (E.nivel === "zona") {
+    listaRank = E.unidades;
     const qz = quebras(E.unidades.map(u => u[E.modo])), mx = Math.max(...E.unidades.map(u => u.aptos));
     for (const u of E.unidades) {
       const z = E.B.zonas[u.chave]; if (!z?.lat) continue;
       L.circleMarker([z.lat, z.lng], {radius: 4 + 14 * Math.sqrt(u.aptos / mx), color: "#0b1015", weight: 1, fillOpacity: .9, fillColor: corValor(u, E.modo, qz)})
-        .bindTooltip(dica(u), {sticky: true}).on("click", () => abrir(u.chave)).addTo(grupo);
+        .bindTooltip(dica(u), {sticky: true}).on("click", () => abrir("zona", u.chave)).addTo(grupo);
     }
   }
   E.camada = grupo.addTo(E.mapa);
-  if (!E.limites) { E.limites = grupo.getBounds(); if ($("#mapa").clientWidth) E.mapa.fitBounds(E.limites); }
+  if (!E.mapa._limites) { E.mapa._limites = grupo.getBounds(); if ($("#mapa").clientWidth) E.mapa.fitBounds(E.mapa._limites); }
   $("#legenda").innerHTML = legenda(E.modo, q);
-  $("#mapaTitulo").textContent = E.nivel === "zona" ? "Mapa · zonas eleitorais (círculos)" : REGIAO(E.nivel) ? `Mapa · ${NIVEIS[E.nivel]}` : "Mapa · cidades";
+  $("#mapaTitulo").textContent = E.nivel === "zona" ? "Mapa · zonas eleitorais (círculos)" : `Mapa · ${NIVEIS[nivelMapa]}`;
+  ranking(listaRank);
+}
+function ranking(lista) {
+  const m = E.modo, nome = MODOS().find(x => x[0] === m)[1], item = (u, v) => `<li><button data-abrir="${u.nivel}|${esc(u.chave)}"><span>${esc(u.nome)}</span><b>${v}</b></button></li>`;
+  let html;
+  if (CATEG(m)) {
+    const grupos = new Map();
+    for (const u of lista) { const k = m === "venc26" ? NOME_EXIBE(u.venc26) : m === "venc22" ? NOME_EXIBE(u.venc22) : m === "virou" ? (u.virou ? "Mudou de lado" : "Manteve") : (u.melhor >= 0 ? `${E.deps[u.melhor].d.nome} ${E.deps[u.melhor].d.ano}` : "–"); const g = grupos.get(k) || {n: 0, el: 0, cor: corValor(u, m, [])}; g.n++; g.el += u.aptos; grupos.set(k, g); }
+    const tot = lista.reduce((t, u) => t + u.aptos, 0);
+    html = `<h3 class="h3c">${esc(nome)}</h3><div class="cont">${[...grupos.entries()].sort((a, b) => b[1].n - a[1].n).map(([k, g]) => `<div class="cont-l"><i style="background:${g.cor}"></i><b>${esc(k)}</b><span>${int(g.n)} lugares · ${pct(g.el / tot)} dos eleitores</span></div>`).join("")}</div>`;
+    if (m === "virou") { const v = lista.filter(u => u.virou).sort((a, b) => b.aptos - a.aptos).slice(0, 12); html += `<h4 class="sub">Maiores que mudaram de lado</h4><ol class="rank">${v.map(u => item(u, `${esc(NOME_EXIBE(u.venc22))} → ${esc(NOME_EXIBE(u.venc26))}`)).join("")}</ol>`; }
+    else { const g = lista.slice().sort((a, b) => b.aptos - a.aptos).slice(0, 10); html += `<h4 class="sub">Maiores eleitorados</h4><ol class="rank">${g.map(u => item(u, `<span class="venc"><i style="background:${corValor(u, m, [])}"></i></span>${m === "venc22" ? pct(Math.max(u.lula22, u.bol22)) : pct(Math.max(u.lula26, u.bol26))}`)).join("")}</ol>`; }
+  } else {
+    const v = lista.filter(u => u[m] != null && isFinite(u[m])), alto = v.slice().sort((a, b) => b[m] - a[m]).slice(0, 10), baixo = v.slice().sort((a, b) => a[m] - b[m]).slice(0, 10);
+    html = `<h3 class="h3c">${esc(nome)}</h3><h4 class="sub">Maiores</h4><ol class="rank">${alto.map(u => item(u, fmtModo(m, u[m]))).join("")}</ol><h4 class="sub">Menores</h4><ol class="rank">${baixo.map(u => item(u, fmtModo(m, u[m]))).join("")}</ol>`;
+  }
+  $("#ranking").innerHTML = html;
 }
 $("#modoMapa").addEventListener("click", e => { const b = e.target.closest("[data-m]"); if (b) { E.modo = b.dataset.m; desenharMapa(); } });
 
-/* ---------------- detalhe de um lugar */
-function tabelaSub(titulo, rot, lista) {
+/* ---------------- lugar escolhido: mapa ampliado, comparativo, mais votados */
+function tabelaSub(titulo, rot, lista, nivelSub) {
   if (lista.length < 2) return "";
-  return `<h4 class="sub">${esc(titulo)} <small>${lista.length}</small></h4><div class="tab-wrap" style="max-height:380px"><table><thead><tr><th>${rot}</th><th>Eleitores</th><th>Lula 22</th><th>Lula 26</th><th>Δ Lula</th><th>Jair 22</th><th>Flávio 26</th><th>Δ Bolsonaro</th><th>Abstenção 26</th><th>Vencedor 26</th>${E.deps.map(s => `<th style="box-shadow:inset 0 -3px 0 ${s.cor}">${esc(s.d.nome)} ${s.d.ano}</th>`).join("")}</tr></thead>
-    <tbody>${lista.sort((a, b) => b.aptos - a.aptos).map(c => `<tr><td><b>${esc(c.nome)}</b></td><td>${int(c.aptos)}</td><td>${pct(c.lula22)}</td><td>${pct(c.lula26)}</td><td class="${c.dLula > 0 ? "pos" : "neg"}">${pp(c.dLula)}</td><td>${pct(c.bol22)}</td><td>${pct(c.bol26)}</td><td class="${c.dBol > 0 ? "pos" : "neg"}">${pp(c.dBol)}</td><td>${pct(c.abst26)}</td><td><span class="venc"><i style="background:${corCand(c.venc26)}"></i>${esc(NOME_EXIBE(c.venc26))}</span>${c.virou ? '<span class="virou">virou</span>' : ""}</td>${E.deps.map((s, j) => `<td>${int(c["dv" + j])} <small class="nota">${pct(c["dp" + j], 2)}</small></td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+  return `<h4 class="sub">${esc(titulo)} <small>${lista.length} · clique para abrir</small></h4><div class="tab-wrap" style="max-height:420px"><table><thead><tr><th>${rot}</th><th>Eleitores</th><th>Lula 22</th><th>Lula 26</th><th>Δ Lula</th><th>Jair 22</th><th>Flávio 26</th><th>Δ Bolsonaro</th><th>Vencedor 26</th><th>Federal + votado 26</th><th>Estadual + votado 26</th>${E.deps.map(s => `<th style="box-shadow:inset 0 -3px 0 ${s.cor}">${esc(s.d.nome)} ${s.d.ano}</th>`).join("")}</tr></thead>
+    <tbody>${lista.sort((a, b) => b.aptos - a.aptos).map(c => `<tr ${nivelSub ? `data-abrir="${nivelSub}|${esc(c.chave)}"` : ""}><td><b>${esc(c.nome)}</b></td><td>${int(c.aptos)}</td><td>${pct(c.lula22)}</td><td>${pct(c.lula26)}</td><td class="${c.dLula > 0 ? "pos" : "neg"}">${pp(c.dLula)}</td><td>${pct(c.bol22)}</td><td>${pct(c.bol26)}</td><td class="${c.dBol > 0 ? "pos" : "neg"}">${pp(c.dBol)}</td><td><span class="venc"><i style="background:${corCand(c.venc26)}"></i>${esc(NOME_EXIBE(c.venc26))}</span>${c.virou ? '<span class="virou">virou</span>' : ""}</td><td>${celTop(c.f26)}</td><td>${celTop(c.e26)}</td>${E.deps.map((s, j) => `<td>${int(c["dv" + j])} <small class="nota">${pct(c["dp" + j], 2)}</small></td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
 }
 async function topDeps(id, alvo, titulo) {
-  if (!E.top) E.top = await fetch("dados/top.json").then(r => r.json());
   const g = E.top[id]; if (!g) { alvo.innerHTML = ""; return; }
   const ano = E.topAno;
   const col = (cg, t) => `<div class="card"><h4 class="sub" style="margin-top:0">${t} · 20${ano}</h4><ol class="top">${(g[`${cg}-${ano}`] || []).slice(0, 15).map(([i, q]) => {
@@ -253,28 +362,61 @@ async function topDeps(id, alvo, titulo) {
   alvo.innerHTML = `<div class="sub-cab"><h4 class="sub">${esc(titulo)} <small>toque no + para comparar</small></h4><div class="seg anoTop" role="group" aria-label="Ano"><button data-ano="26" aria-pressed="${ano === "26"}">2026</button><button data-ano="22" aria-pressed="${ano === "22"}">2022</button></div></div><div class="grid2">${col(6, "Deputado federal")}${col(7, "Deputado estadual")}</div>`;
   alvo.dataset.id = id; alvo.dataset.titulo = titulo;
 }
-function recarregarTops() { document.querySelectorAll("[data-id]").forEach(el => topDeps(el.dataset.id, el, el.dataset.titulo)); }
+function recarregarTops() { $$("[data-id]").forEach(el => topDeps(el.dataset.id, el, el.dataset.titulo)); }
 document.addEventListener("click", e => {
   const a = e.target.closest(".anoTop [data-ano]"); if (a) { E.topAno = a.dataset.ano; recarregarTops(); return; }
   const b = e.target.closest("[data-dep]"); if (b) { const d = E.B.deputados[+b.dataset.dep]; if (!E.deps.some(s => s.d.id === d.id)) escolherDep(d, false); }
 });
-async function abrir(chave) {
-  const u = E.unidades.find(x => x.chave === chave); if (!u) return;
-  E.sel = chave;
-  $("#detalhe").hidden = false;
+function abrir(nivel, chave) {
+  const u = unidade(nivel, chave); if (!u) return;
+  E.sel = {nivel, chave};
+  $("#abaLugar").hidden = false; $("#abaLugarNome").textContent = u.nome.length > 28 ? u.nome.slice(0, 27) + "…" : u.nome;
+  $("#detTipo").textContent = NIVEL1[nivel];
   $("#detTitulo").textContent = u.nome;
+  const muns = cidadesDe(u), B = E.B;
+  const partes = [nivel !== "mun" && nivel !== "mg" ? `${int(muns.length)} ${muns.length === 1 ? "cidade" : "cidades"}` : "", `${int(u.aptos)} eleitores`,
+    nivel === "mun" ? `${B.municipios[chave]?.me} · ${B.municipios[chave]?.mi ? "Microrregião de " + B.municipios[chave].mi : ""}` : "",
+    nivel === "mun" && u.mzs.length > 1 ? `${u.mzs.length} zonas eleitorais` : ""].filter(Boolean);
+  $("#detSub").textContent = partes.join(" · ");
   const box = document.createElement("div"); quadro(u, box);
-  const B = E.B;
   let extra = "";
-  if (E.nivel === "mun") extra = tabelaSub("Zonas eleitorais da cidade", "Zona", u.mzs.map(k => Object.assign(somar([k]), {nome: `Zona ${k.split("-")[1]}`})));
-  else if (E.nivel === "zona") extra = tabelaSub("Cidades da zona", "Cidade", u.mzs.map(k => Object.assign(somar([k]), {nome: B.municipios[k.split("-")[0]]?.nome || k})));
-  else if (REGIAO(E.nivel) || E.nivel === "mg") { const s = new Set(u.mzs); extra = tabelaSub(E.nivel === "mg" ? "Todas as cidades" : "Cidades da região", "Cidade", agrupar("mun").filter(c => c.mzs.some(k => s.has(k)))); }
+  if (nivel === "mun") extra = tabelaSub("Zonas eleitorais da cidade", "Zona", u.mzs.map(k => Object.assign(somar([k]), {chave: k.split("-")[1], nome: `Zona ${k.split("-")[1]}`}, maisVotados("zona", k.split("-")[1]))), "zona");
+  else if (nivel === "zona") extra = tabelaSub("Cidades da zona", "Cidade", u.mzs.map(k => Object.assign(somar([k]), {chave: k.split("-")[0], nome: B.municipios[k.split("-")[0]]?.nome || k}, maisVotados("mun", k.split("-")[0]))), "mun");
+  else { const s = new Set(u.mzs); extra = tabelaSub(nivel === "mg" ? "Todas as cidades" : "Cidades", "Cidade", agrupar("mun").filter(c => c.mzs.some(k => s.has(k))), "mun"); }
+  if (nivel === "me") { const s = new Set(muns); extra = tabelaSub("Microrregiões", "Microrregião", agrupar("mi").filter(c => s.has(c.mzs[0].split("-")[0])), "mi") + extra; }
   const dep = E.deps.length ? `<h4 class="sub">Deputados escolhidos neste lugar</h4><div class="kpis">${E.deps.map((s, j) => `<div class="card dep-kpi" style="--cor:${s.cor}">${avatar(s.d.foto, s.d.nome, s.cor, "av-p")}<div><b>${int(u["dv" + j])}</b><span>votos de ${esc(s.d.nome)} (${s.d.ano}) · ${pct(u["dp" + j], 2)} dos válidos · ${pct(u["dv" + j] / s.total, 1)} de tudo que teve em MG</span></div></div>`).join("")}</div>` : "";
   $("#detCorpo").innerHTML = ""; $("#detCorpo").append(box); $("#detCorpo").insertAdjacentHTML("beforeend", dep + '<div id="detTop"></div>' + extra);
-  $("#detalhe").scrollIntoView({behavior: "smooth", block: "start"});
-  topDeps(E.nivel === "mg" ? "mg" : `${E.nivel}:${chave}`, $("#detTop"), `Deputados mais votados em ${u.nome}`);
+  topDeps(nivel === "mg" ? "mg" : `${nivel}:${chave}`, $("#detTop"), `Deputados mais votados em ${u.nome}`);
+  if (E.detMapa) E.detMapa._limites = null;
+  irAba("lugar");
 }
-$("#fecharDet").addEventListener("click", () => { $("#detalhe").hidden = true; E.sel = null; });
+function desenharDetMapa() {
+  if (!E.sel) return;
+  const {nivel, chave} = E.sel, u = unidade(nivel, chave); if (!u) return;
+  if (!E.detMapa) E.detMapa = novoMapa("detMapa");
+  if (E.detCamada) E.detCamada.remove();
+  E.detModo = validaModo(E.detModo); botoesModo("#detModo", E.detModo);
+  const B = E.B, muns = new Set(cidadesDe(u));
+  // cada cidade do lugar com o próprio resultado; numa zona, a parte da cidade que fica na zona
+  const porM = new Map();
+  if (nivel === "zona") for (const k of u.mzs) porM.set(k.split("-")[0], Object.assign(somar([k]), {nome: `${B.municipios[k.split("-")[0]]?.nome} (Zona ${chave})`}, maisVotados("mun", k.split("-")[0])));
+  else for (const c of agrupar("mun")) if (muns.has(c.chave)) porM.set(c.chave, c);
+  const porIbge = new Map([...porM].map(([m, c]) => [ibgeDe(m), c]));
+  const lista = [...porM.values()], q = quebras(agrupar("mun").map(c => c[E.detModo]));
+  const grupo = L.featureGroup(), foco = L.featureGroup();
+  L.geoJSON(E.geo, {style: f => { const c = porIbge.get(f.properties.ibge); return c ? {color: "#0b1015", weight: .8, fillOpacity: .92, fillColor: corValor(c, E.detModo, q)} : {color: "rgba(255,255,255,.08)", weight: .3, fillOpacity: .05, fillColor: "#9aa6b2"}; },
+    onEachFeature: (f, l) => { const c = porIbge.get(f.properties.ibge); if (!c) return; l.addTo(foco); l.bindTooltip(dica(c), {sticky: true}); if (nivel !== "mun") l.on("click", () => abrir("mun", [...porM].find(([m]) => ibgeDe(m) === f.properties.ibge)[0])); }}).addTo(grupo);
+  // cidade com várias zonas: um círculo por zona
+  if (nivel === "mun" && u.mzs.length > 1) {
+    const zs = u.mzs.map(k => Object.assign(somar([k]), {nome: `Zona ${k.split("-")[1]}`, z: k.split("-")[1]})), mx = Math.max(...zs.map(z => z.aptos)), qz = quebras(zs.map(z => z[E.detModo]));
+    for (const z of zs) { const p = B.zonas[z.z]; if (!p?.lat) continue; L.circleMarker([p.lat, p.lng], {radius: 7 + 16 * Math.sqrt(z.aptos / mx), color: "#0b1015", weight: 1.2, fillOpacity: .95, fillColor: corValor(z, E.detModo, CATEG(E.detModo) ? q : qz)}).bindTooltip(dica(z), {sticky: true}).on("click", () => abrir("zona", z.z)).addTo(grupo); }
+  }
+  E.detCamada = grupo.addTo(E.detMapa);
+  const lim = foco.getBounds();
+  if (lim.isValid() && !E.detMapa._limites) { E.detMapa._limites = lim.pad(.08); if ($("#detMapa").clientWidth) E.detMapa.fitBounds(E.detMapa._limites); }
+  $("#detLegenda").innerHTML = legenda(E.detModo, q) + (nivel === "mun" && u.mzs.length > 1 ? `<span class="nota">Círculos: as ${u.mzs.length} zonas eleitorais da cidade.</span>` : "");
+}
+$("#detModo").addEventListener("click", e => { const b = e.target.closest("[data-m]"); if (b) { E.detModo = b.dataset.m; desenharDetMapa(); } });
 
 /* ---------------- deputados: entre si e com o Presidente */
 function correl(xs, ys, ws) {
@@ -301,62 +443,64 @@ function sugestoes() {
 $("#chips").addEventListener("click", async e => {
   const x = e.target.closest("[data-tirar]"); if (x) { E.deps.splice(+x.dataset.tirar, 1); E.deps.forEach((s, j) => s.cor = CORES_DEP[j]); return atualizarDeps(); }
   const p = e.target.closest("[data-par]"); if (p) return escolherDep(E.B.deputados[+p.dataset.par]);
-  const s = e.target.closest("[data-sug]"); if (s) { E.deps = []; for (const i of s.dataset.sug.split(",")) await escolherDep(E.B.deputados[+i], false, true); atualizarDeps(); $("#depSec").scrollIntoView({behavior: "smooth"}); }
+  const s = e.target.closest("[data-sug]"); if (s) { E.deps = []; for (const i of s.dataset.sug.split(",")) await escolherDep(E.B.deputados[+i], false, true); atualizarDeps(); }
 });
-async function escolherDep(d, rolar = true, silencioso = false) {
+async function escolherDep(d, irPara = true, silencioso = false) {
   if (E.deps.some(s => s.d.id === d.id)) return;
   if (E.deps.length >= 4) { toast("Já há 4 deputados no comparativo. Remova um para adicionar outro."); return; }
   const votos = await fetch(`dados/dep/${d.id}.json`).then(r => r.json());
   E.deps.push({d, votos, total: Object.values(votos).reduce((t, x) => t + x, 0), cor: CORES_DEP[E.deps.length]});
   if (silencioso) return;
-  E.modo = "dp" + (E.deps.length - 1);
+  E.modo = E.galModo = E.detModo = "dp" + (E.deps.length - 1);
   atualizarDeps();
-  if (rolar) $("#depSec").scrollIntoView({behavior: "smooth"});
-  else toast(`<b>${esc(d.nome)}</b> (${d.ano}) entrou no comparativo · <a href="#depSec">ver deputados</a>`);
+  if (irPara) irAba("deps");
+  else toast(`<b>${esc(d.nome)}</b> (${d.ano}) entrou no comparativo · <a href="#deps" data-ir="deps">ver deputados</a>`);
 }
-function atualizarDeps() { chips(); recalcular(); secaoDeputados(); if (E.sel && !$("#detalhe").hidden) { const y = scrollY; abrir(E.sel).then(() => scrollTo({top: y})); } recarregarTops(); }
-
+function atualizarDeps() {
+  chips(); recalcular(); secaoDeputados();
+  if (E.sel) { const y = scrollY, aba = E.aba; abrir(E.sel.nivel, E.sel.chave); if (aba !== "lugar") irAba(aba, false); scrollTo({top: y}); }
+  recarregarTops();
+}
 function secaoDeputados() {
   E.graficos.forEach(g => g.destroy()); E.graficos = [];
   if (!E.deps.length) { $("#depCorpo").innerHTML = `<div class="vazio card"><b>Escolha um deputado acima</b><span>ou toque no <b>+</b> ao lado de um nome nas listas de mais votados. Dá para misturar federal e estadual, 2022 e 2026, e comparar a mesma pessoa nos dois anos.</span></div>`; return; }
   const cid = agrupar("mun").filter(c => c.t26 > 0 && c.t22 > 0), ws = cid.map(c => c.aptos);
   const t22 = E.turno === "1" ? "1º turno" : "2º turno";
-  // cartões: um por deputado, cruzado com o Presidente do mesmo ano
   const cards = E.deps.map((s, j) => {
     const d = s.d, ys = cid.map(c => c["dp" + j] ?? 0);
     const lula = cid.map(c => d.ano === 26 ? c.lula26 : c.lula22), bol = cid.map(c => d.ano === 26 ? c.bol26 : c.bol22);
     const rL = correl(lula, ys, ws), rB = correl(bol, ys, ws), nb = d.ano === 26 ? "Flávio" : "Jair";
     const lado = Math.abs(rL) < .15 ? "atravessa os dois campos: não depende de onde Lula ou Bolsonaro foram melhor" : rL > 0 ? "é mais forte onde o Lula foi melhor" : `é mais forte onde o ${nb} Bolsonaro foi melhor`;
     const topC = cid.slice().sort((a, b) => b["dv" + j] - a["dv" + j]).slice(0, 3).map(c => c.nome).join(", ");
-    s.rL = rL; s.rB = rB;
+    const me = agrupar("me").slice().sort((a, b) => (b["dp" + j] ?? 0) - (a["dp" + j] ?? 0))[0];
     return `<div class="card dep-card" style="--cor:${s.cor}">
       <div class="dep-top">${avatar(d.foto, d.nome, s.cor, "av-g")}<div><h3>${esc(d.nome)}</h3><p>${logo(d.partido)}${esc(d.partido)} · ${cargoNome(d.cargo)} 20${d.ano}</p><span class="sit ${d.eleito ? "ok" : ""}">${esc(d.situacao || (d.eleito ? "Eleito(a)" : "Não eleito(a)"))}</span></div></div>
       <div class="dep-num"><div><b>${int(d.votos)}</b><span>votos em MG</span></div><div><b>${dec(rL)}</b><span>× Lula ${d.ano === 26 ? "2026" : "2022 (" + t22 + ")"}</span></div><div><b>${dec(rB)}</b><span>× ${nb} Bolsonaro</span></div></div>
-      <p class="leitura">O voto de <b>${esc(d.nome)}</b> ${lado} <span class="nota">(${leituraR(rL)} com o % do Lula nas cidades)</span>. Mais votos em: ${esc(topC)}.</p></div>`;
+      <p class="leitura">O voto de <b>${esc(d.nome)}</b> ${lado} <span class="nota">(${leituraR(rL)} com o % do Lula nas cidades)</span>. Mais votos em: ${esc(topC)}. Macrorregião mais forte: <b>${esc(me.nome)}</b> (${pct(me["dp" + j], 2)}).</p></div>`;
   }).join("");
-  // pares: deputado × deputado
   let pares = "";
   if (E.deps.length > 1) {
     const linhas = [];
     for (let a = 0; a < E.deps.length; a++) for (let b = a + 1; b < E.deps.length; b++) {
       const A = E.deps[a], Bd = E.deps[b], r = correl(cid.map(c => c["dp" + a] ?? 0), cid.map(c => c["dp" + b] ?? 0), ws);
-      const ganhaA = cid.filter(c => (c["dp" + a] ?? 0) > (c["dp" + b] ?? 0)).length;
-      const mesma = A.d.par === Bd.d.id;
+      const ganhaA = cid.filter(c => (c["dp" + a] ?? 0) > (c["dp" + b] ?? 0)).length, mesma = A.d.par === Bd.d.id;
       linhas.push(`<div class="par-linha"><span class="pts"><i style="background:${A.cor}"></i><i style="background:${Bd.cor}"></i></span><div><b>${esc(A.d.nome)} ${A.d.ano} × ${esc(Bd.d.nome)} ${Bd.d.ano}</b>${mesma ? ' <span class="selo mini">mesma pessoa</span>' : ""}
         <span>correlação <b>${dec(r)}</b> (${leituraR(r)}) · ${esc(A.d.nome)} ${A.d.ano} tem % maior em <b>${int(ganhaA)}</b> cidades e ${esc(Bd.d.nome)} ${Bd.d.ano} em <b>${int(cid.length - ganhaA)}</b>${mesma ? ` · votos: ${int(A.d.votos)} → ${int(Bd.d.votos)} (${pct(Bd.d.votos / A.d.votos - 1)})` : ""}</span></div></div>`);
     }
     pares = `<div class="card pares"><h3 class="h3c">Deputado × deputado</h3><p class="nota">Correlação perto de +1: são fortes nos mesmos lugares. Perto de −1: onde um é forte, o outro é fraco.</p>${linhas.join("")}</div>`;
   }
-  // tabela comparativa das cidades
+  // um mapinha de Minas por deputado
+  const cidMap = new Map(agrupar("mun").map(c => [c.chave, c]));
+  const mapas = `<div class="dep-mapas">${E.deps.map((s, j) => { const q = quebras([...cidMap.values()].map(c => c["dp" + j])); return `<div class="card"><h3 class="h3c"><i class="pt" style="background:${s.cor}"></i>${esc(s.d.nome)} ${s.d.ano} em Minas</h3>${miniSvg([...cidMap.values()].map(c => ({ibge: ibgeDe(c.chave), cor: corValor(c, "dp" + j, q), titulo: `${c.nome}: ${int(c["dv" + j])} votos (${pct(c["dp" + j], 2)})`})), "mini-mapa grande")}<div class="legenda">${legenda("dp" + j, q)}</div></div>`; }).join("")}
+    ${E.deps.length > 1 ? `<div class="card"><h3 class="h3c">Qual foi melhor em cada cidade</h3>${miniSvg([...cidMap.values()].map(c => ({ibge: ibgeDe(c.chave), cor: corValor(c, "melhor", []), titulo: c.nome})), "mini-mapa grande")}<div class="legenda">${legenda("melhor", [])}</div></div>` : ""}</div>`;
   const topC = cid.slice().sort((a, b) => E.deps.reduce((t, s, j) => t + (b["dv" + j] || 0), 0) - E.deps.reduce((t, s, j) => t + (a["dv" + j] || 0), 0)).slice(0, 40);
-  const tab = `<div class="card" style="margin-top:14px"><h3 class="h3c">Cidades onde os escolhidos tiveram mais votos <small class="nota">40 maiores · clique para abrir o comparativo da cidade</small></h3><div class="tab-wrap" style="max-height:460px"><table><thead><tr><th>Cidade</th>${E.deps.map(s => `<th style="box-shadow:inset 0 -3px 0 ${s.cor}">${esc(s.d.nome)} ${s.d.ano}</th><th>%</th>`).join("")}${E.deps.length > 1 ? "<th>Melhor</th>" : ""}<th>Lula 22</th><th>Lula 26</th><th>Jair 22</th><th>Flávio 26</th><th>Vencedor 26</th></tr></thead>
-    <tbody>${topC.map(c => `<tr data-ch="${esc(c.chave)}"><td><b>${esc(c.nome)}</b></td>${E.deps.map((s, j) => `<td>${int(c["dv" + j])}</td><td>${pct(c["dp" + j], 2)}</td>`).join("")}${E.deps.length > 1 ? `<td>${c.melhor >= 0 ? `<span class="venc"><i style="background:${E.deps[c.melhor].cor}"></i>${esc(E.deps[c.melhor].d.nome)}</span>` : "–"}</td>` : ""}<td>${pct(c.lula22)}</td><td>${pct(c.lula26)}</td><td>${pct(c.bol22)}</td><td>${pct(c.bol26)}</td><td>${esc(NOME_EXIBE(c.venc26))}</td></tr>`).join("")}</tbody></table></div></div>`;
-  $("#depCorpo").innerHTML = `<div class="dep-cards">${cards}</div>${pares}
+  const tab = `<div class="card" style="margin-top:14px"><h3 class="h3c">Cidades onde os escolhidos tiveram mais votos <small class="nota">40 maiores · clique para abrir a cidade</small></h3><div class="tab-wrap" style="max-height:460px"><table><thead><tr><th>Cidade</th>${E.deps.map(s => `<th style="box-shadow:inset 0 -3px 0 ${s.cor}">${esc(s.d.nome)} ${s.d.ano}</th><th>%</th>`).join("")}${E.deps.length > 1 ? "<th>Melhor</th>" : ""}<th>Lula 22</th><th>Lula 26</th><th>Jair 22</th><th>Flávio 26</th><th>Vencedor 26</th></tr></thead>
+    <tbody>${topC.map(c => `<tr data-abrir="mun|${esc(c.chave)}"><td><b>${esc(c.nome)}</b></td>${E.deps.map((s, j) => `<td>${int(c["dv" + j])}</td><td>${pct(c["dp" + j], 2)}</td>`).join("")}${E.deps.length > 1 ? `<td>${c.melhor >= 0 ? `<span class="venc"><i style="background:${E.deps[c.melhor].cor}"></i>${esc(E.deps[c.melhor].d.nome)}</span>` : "–"}</td>` : ""}<td>${pct(c.lula22)}</td><td>${pct(c.lula26)}</td><td>${pct(c.bol22)}</td><td>${pct(c.bol26)}</td><td>${esc(NOME_EXIBE(c.venc26))}</td></tr>`).join("")}</tbody></table></div></div>`;
+  $("#depCorpo").innerHTML = `<div class="dep-cards">${cards}</div>${pares}${mapas}
     <div class="grid2" style="margin-top:14px">
       <div class="card"><h3 class="h3c">Do menos ao mais lulista</h3><canvas id="gQuint" height="270"></canvas><p class="nota">Cidades divididas em 5 grupos com o mesmo número de eleitores, pelo % do Lula em 2026. Barra = % dos válidos de cada deputado no grupo.</p></div>
       <div class="card"><h3 class="h3c" id="gDispT"></h3><canvas id="gDisp" height="270"></canvas><p class="nota">Cada bolinha é uma cidade; o tamanho é o número de eleitores.</p></div>
     </div>${tab}`;
-  // gráfico por grupos lulistas
   const ordC = cid.slice().sort((a, b) => a.lula26 - b.lula26), totE = ordC.reduce((t, c) => t + c.aptos, 0);
   const quint = [0, 1, 2, 3, 4].map(() => ({lula: 0, t: 0, dv: E.deps.map(() => 0), val: E.deps.map(() => 0)}));
   const vals = E.deps.map(s => validos(s.d));
@@ -382,7 +526,6 @@ function secaoDeputados() {
       options: {plugins: {legend: {display: false}, tooltip: {callbacks: {label: c => `${c.raw.nome}: ${A.d.nome} ${dec(c.raw.x, 2)}% · ${Bd.d.nome} ${dec(c.raw.y, 2)}%`}}},
         scales: {x: {title: {display: true, text: `% de ${A.d.nome} ${A.d.ano}`, color: A.cor}, grid}, y: {title: {display: true, text: `% de ${Bd.d.nome} ${Bd.d.ano}`, color: Bd.cor}, grid}}}}));
   }
-  $("#depCorpo").querySelector("tbody").addEventListener("click", e => { const tr = e.target.closest("tr[data-ch]"); if (tr) { mudarNivel("mun"); abrir(tr.dataset.ch); } });
 }
 
 /* ---------------- buscas (lista que abre enquanto digita) */
@@ -404,25 +547,34 @@ $("#qUnidade").addEventListener("change", e => {
   let nivel, chave;
   if (v.startsWith("Cidade · ")) { nivel = "mun"; chave = Object.keys(B.municipios).find(m => B.municipios[m].nome === parte); }
   else if (v.startsWith("Zona ")) { nivel = "zona"; chave = Object.keys(B.zonas).find(z => B.zonas[z].nome === v); }
-  else nivel = {"Macrorregião": "me", "Microrregião": "mi", "Região intermediária": "ri", "Região imediata": "rm"}[v.split(" · ")[0]], chave = parte;
+  else { nivel = {"Macrorregião": "me", "Microrregião": "mi", "Região intermediária": "ri", "Região imediata": "rm"}[v.split(" · ")[0]]; chave = parte; }
   if (!nivel || !chave) return;
-  mudarNivel(nivel); abrir(chave); e.target.value = ""; e.target.blur();
+  e.target.value = ""; e.target.blur(); abrir(nivel, chave);
 });
 $("#qDep").addEventListener("change", e => {
   const d = E.B.deputados.find(x => rotDep(x) === e.target.value);
   if (d) { e.target.value = ""; e.target.blur(); escolherDep(d); }
 });
-$("#filtroCargo").addEventListener("click", e => { const b = e.target.closest("[data-c]"); if (!b) return; E.filtroCargo = +b.dataset.c; $("#filtroCargo").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); preencherDeps(); });
-$("#filtroAno").addEventListener("click", e => { const b = e.target.closest("[data-a]"); if (!b) return; E.filtroAno = +b.dataset.a; $("#filtroAno").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); preencherDeps(); });
+$("#filtroCargo").addEventListener("click", e => { const b = e.target.closest("[data-c]"); if (!b) return; E.filtroCargo = +b.dataset.c; $$("#filtroCargo button").forEach(x => x.setAttribute("aria-pressed", x === b)); preencherDeps(); });
+$("#filtroAno").addEventListener("click", e => { const b = e.target.closest("[data-a]"); if (!b) return; E.filtroAno = +b.dataset.a; $$("#filtroAno button").forEach(x => x.setAttribute("aria-pressed", x === b)); preencherDeps(); });
 
 /* ---------------- controles */
-function mudarNivel(n) { E.nivel = n; $("#nivel").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x.dataset.n === n)); recalcular(); }
-$("#nivel").addEventListener("click", e => { const b = e.target.closest("[data-n]"); if (b) { mudarNivel(b.dataset.n); $("#detalhe").hidden = true; } });
-$("#turno").addEventListener("click", e => { const b = e.target.closest("[data-t]"); if (!b) return; E.turno = b.dataset.t; $("#turno").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); destaques(); recalcular(); secaoDeputados(); if (E.sel && !$("#detalhe").hidden) abrir(E.sel); });
+const BOT_NIVEL = [["mun", "Cidades"], ["zona", "Zonas"], ["me", "Macrorregiões"], ["mi", "Microrregiões"], ["ri", "Regiões intermediárias"], ["rm", "Regiões imediatas"], ["mg", "Minas"]];
+function segNivel() { $$(".nivelSeg").forEach(el => el.innerHTML = BOT_NIVEL.map(([k, n]) => `<button data-n="${k}" aria-pressed="${E.nivel === k}">${n}</button>`).join("")); }
+document.addEventListener("click", e => { const b = e.target.closest(".nivelSeg [data-n]"); if (!b) return; E.nivel = b.dataset.n; segNivel(); E.unidades = agrupar(E.nivel); if (E.aba === "mapa") desenharMapa(); else tabela(); });
+$("#turno").addEventListener("click", e => {
+  const b = e.target.closest("[data-t]"); if (!b) return; E.turno = b.dataset.t; $$("#turno button").forEach(x => x.setAttribute("aria-pressed", x === b));
+  const aba = E.aba; recalcular(); secaoDeputados(); if (E.sel) abrir(E.sel.nivel, E.sel.chave); irAba(aba, false);
+});
 function recalcular() {
+  CACHE = {};
   E.unidades = agrupar(E.nivel);
   quadro(somar(todasMz()), $("#quadro"));
-  tabela(); desenharMapa();
+  destaques(); galeriaGeral();
+  if (E.aba === "mapa") desenharMapa();
+  if (E.aba === "regioes") galeria();
+  if (E.aba === "tabela") tabela();
+  if (E.aba === "lugar") desenharDetMapa();
 }
 
 /* ---------------- início */
@@ -432,13 +584,14 @@ function recalcular() {
   E.partidos = new Map([...B.cand22["1"], ...B.cand22["2"], ...B.cand26].map(c => [c[0], c[1]]));
   E.fotos22 = new Map([...B.cand22["1"], ...B.cand22["2"]].filter(c => c[3]).map(c => [c[0], c[3]]));
   E.fotos26 = new Map(B.cand26.filter(c => c[3]).map(c => [c[0], c[3]]));
-  preencherBuscas(); destaques(); recalcular(); chips(); secaoDeputados();
+  prepararGeo(); segNivel(); preencherBuscas(); recalcular(); chips(); secaoDeputados();
   topDeps("mg", $("#geralTop"), "Deputados mais votados em Minas");
   const n22 = B.deputados.filter(d => d.ano === 22).length, n26 = B.deputados.length - n22;
   $("#fontesTexto").innerHTML = `<p><b>Presidente 2022:</b> TSE, dados abertos (votação por candidato e detalhe da votação por município e zona eleitoral), 1º e 2º turnos, Minas Gerais.</p>
     <p><b>Presidente 2026:</b> boletins de urna publicados pelo TSE, somados por município e zona e conferidos com o arquivo oficial de detalhe por seção. Os totais podem ficar alguns votos abaixo do oficial por causa de poucas seções sem boletim publicado.</p>
     <p><b>Deputados:</b> ${int(n26)} candidatos de 2026 e ${int(n22)} de 2022 com voto em Minas (federais e estaduais). O % é sobre os votos válidos do mesmo cargo e ano. A mesma pessoa nos dois anos é ligada pelo nome completo registrado no TSE.</p>
     <p><b>Fotos:</b> fotos oficiais de candidatura divulgadas pelo TSE (2022: pacote de dados abertos; 2026: site de resultados).</p>
-    <p><b>Regiões:</b> macrorregiões e microrregiões = mesorregiões e microrregiões geográficas do IBGE (Triângulo, Zona da Mata, Sul de Minas…); regiões intermediárias e imediatas = divisão regional atual do IBGE. <b>Zonas:</b> zonas eleitorais do TSE, posicionadas no mapa pelo centro dos seus locais de votação.</p>
+    <p><b>Regiões:</b> macrorregiões e microrregiões = mesorregiões e microrregiões geográficas do IBGE (Triângulo, Zona da Mata, Sul de Minas…); regiões intermediárias e imediatas = divisão regional atual do IBGE. <b>Zonas:</b> zonas eleitorais do TSE, posicionadas no mapa pelo centro dos seus locais de votação; no mapa de uma zona, cada cidade mostra só a parte dela que fica na zona.</p>
     <p><b>Correlação:</b> mede, de −1 a +1, se dois números sobem e descem juntos nas cidades (cada cidade pesa pelo número de eleitores). Mostra coincidência geográfica, não causa.</p>`;
+  const h = location.hash.slice(1); irAba(["mapa", "regioes", "tabela", "deps"].includes(h) ? h : "geral", false);
 })();
