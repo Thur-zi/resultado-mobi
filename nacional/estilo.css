@@ -156,3 +156,31 @@ footer{color:var(--faint);font-size:12.5px;padding:24px 0 40px;letter-spacing:.0
 .pc img:not(.bandeira):not([width]){width:52px;height:72px;object-fit:cover;object-position:50% 18%}
 .legenda .logos{margin-right:2px}
 .linha .sigla{flex:none;overflow:visible}
+/* Animações (identidade MOBI): entrada ao rolar, números contando, barras crescendo, troca de aba.
+   Só escondem algo com html.anima (existe IntersectionObserver e o movimento não está reduzido). */
+@keyframes mobi-sobe{from{opacity:0;transform:translateY(14px)}}
+@keyframes mobi-cresce{from{transform:scaleX(0)}}
+@keyframes mobi-aparece{from{opacity:0}}
+@keyframes mobi-linha{from{border-bottom-color:transparent}}
+html.anima .anim:not(.visto){opacity:0}
+html.anima .anim.visto{animation:mobi-sobe .6s cubic-bezier(.22,1,.36,1) var(--atraso,0ms) backwards}
+html.anima .anim:not(.visto) :is(.barra i,.comp i,.prog i){transform:scaleX(0)}
+html.anima .visto :is(.barra i,.comp i,.prog i),html.anima .gaveta :is(.barra i,.comp i,.prog i){transform-origin:left center;animation:mobi-cresce .9s cubic-bezier(.22,1,.36,1) calc(var(--atraso,0ms) + 120ms) both}
+.leaflet-overlay-pane{animation:mobi-aparece .7s ease both}
+.abas button{transition:color .2s,border-color .3s}
+.abas button[aria-selected=true]{animation:mobi-linha .4s ease both}
+.seg button{transition:background .2s,color .2s}
+.pc{transition:border-color .2s,transform .25s cubic-bezier(.22,1,.36,1),background .2s}
+.pc:hover{border-color:rgba(85,184,230,.45);transform:translateY(-2px)}
+svg path[data-uf]{transition:fill-opacity .2s,stroke .2s,stroke-width .2s}
+svg path[data-uf]:hover,svg path.realce{stroke:#fff;stroke-width:2.2;fill-opacity:1}
+/* Botão "Ver no mapa" (ícone que abre o texto ao passar o mouse na linha) */
+.ver-mapa{display:inline-flex;align-items:center;gap:0;height:22px;margin-left:8px;padding:0 5px;vertical-align:middle;border-radius:999px;border:1px solid rgba(85,184,230,.35);background:rgba(85,184,230,.08);color:var(--kicker);font:600 11px/1 var(--sans);white-space:nowrap;transition:background .2s,border-color .2s,gap .25s}
+.ver-mapa .t{max-width:0;overflow:hidden;transition:max-width .3s cubic-bezier(.22,1,.36,1)}
+.ver-mapa:hover,.ver-mapa:focus-visible{background:rgba(85,184,230,.2);border-color:rgba(85,184,230,.7);color:var(--fg)}
+tr:hover .ver-mapa,.ver-mapa:hover,.ver-mapa:focus-visible{gap:5px}
+tr:hover .ver-mapa .t,.ver-mapa:hover .t,.ver-mapa:focus-visible .t{max-width:90px}
+tbody tr[data-lugar]:hover{background:rgba(85,184,230,.08)}
+@media (hover:none){.ver-mapa .t{max-width:90px}.ver-mapa{gap:5px}}
+@media print{.anim{opacity:1!important;animation:none!important}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}.anim{opacity:1!important;transform:none!important}}

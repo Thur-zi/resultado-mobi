@@ -58,6 +58,157 @@ async function apiEstatica(u) {
 const lsGet = k => { try { return JSON.parse(localStorage.getItem("nac." + k)); } catch { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem("nac." + k, JSON.stringify(v)); } catch {} };
 
+/* ------------------------------------------------------------------ animações (identidade MOBI)
+   Números contam do zero até o valor quando aparecem, cartões entram ao rolar, barras crescem.
+   Sem IntersectionObserver ou com "reduzir movimento": tudo aparece direto. */
+const CALMO = !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+const TEM_IO = "IntersectionObserver" in window;
+if (!CALMO && TEM_IO) document.documentElement.classList.add("anima");
+const NUM_RE = /\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+(?:,\d+)?/g;
+function contar(el) {
+  if (CALMO || document.hidden || !el?.isConnected) return;
+  const txt = el.textContent;
+  if (el.dataset.contou === txt) return;
+  const nos = [];
+  const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  while (w.nextNode()) { const n = w.currentNode; NUM_RE.lastIndex = 0; if (NUM_RE.test(n.nodeValue)) nos.push([n, n.nodeValue]); }
+  if (!nos.length) return;
+  el.dataset.contou = txt;
+  const fmt = (m, k) => {
+    if (/^(19|20)\d\d$/.test(m)) return m; // ano (ex.: 2026) fica como está
+    const casas = (m.split(",")[1] || "").length;
+    const v = parseFloat(m.replace(/\./g, "").replace(",", ".")) * k;
+    return v.toLocaleString("pt-BR", {minimumFractionDigits: casas, maximumFractionDigits: casas, useGrouping: m.includes(".")});
+  };
+  const t0 = performance.now(), dur = 950, ease = x => 1 - Math.pow(1 - x, 3);
+  const passo = agora => {
+    const k = ease(Math.min(1, (agora - t0) / dur));
+    if (k < 1) { for (const [n, orig] of nos) n.nodeValue = orig.replace(NUM_RE, m => fmt(m, k)); requestAnimationFrame(passo); }
+    else for (const [n, orig] of nos) n.nodeValue = orig; // valor final exatamente como veio
+  };
+  for (const [n, orig] of nos) n.nodeValue = orig.replace(NUM_RE, m => fmt(m, 0));
+  requestAnimationFrame(passo);
+}
+const ANIM_SEL = ".card, .pc, #conteudo > .tab-wrap, #conteudo > h3";
+const CONTA_SEL = ".kpi .v, .kpi .s, .pc .v b, .pc .v small, .linha em, .uf-top .ap, .cands .card b";
+const obsEntrada = !CALMO && TEM_IO ? new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) revelar(e.target); }), {threshold: 0.06, rootMargin: "0px 0px -3% 0px"}) : null;
+function revelar(el) {
+  obsEntrada?.unobserve(el);
+  el.classList.add("visto");
+  el.querySelectorAll("[data-conta]").forEach(n => { if (n.closest(".anim") === el) contar(n); });
+}
+const alvosDe = (raiz, sel) => [...(raiz.matches?.(sel) ? [raiz] : []), ...raiz.querySelectorAll(sel)];
+function animar(raizes) {
+  if (CALMO) return;
+  let i = 0;
+  for (const raiz of raizes) {
+    if (!raiz.isConnected || raiz.closest(".leaflet-container") || raiz.tagName === "TR") continue;
+    for (const el of alvosDe(raiz, ANIM_SEL)) {
+      if (el.classList.contains("anim") || el.closest(".gaveta, .leaflet-container")) continue;
+      el.classList.add("anim"); el.style.setProperty("--atraso", (i++ % 6) * 55 + "ms");
+      if (obsEntrada) obsEntrada.observe(el); else el.classList.add("visto");
+    }
+    for (const n of alvosDe(raiz, CONTA_SEL)) {
+      n.setAttribute("data-conta", "");
+      const a = n.closest(".anim");
+      if (!a || a.classList.contains("visto")) contar(n);
+    }
+  }
+}
+{
+  const fila = new Set(); let marcado = false;
+  const mo = new MutationObserver(ms => {
+    for (const m of ms) for (const n of m.addedNodes) if (n.nodeType === 1) fila.add(n);
+    if (!marcado && fila.size) { marcado = true; queueMicrotask(() => { marcado = false; const ns = [...fila]; fila.clear(); animar(ns); }); }
+  });
+  mo.observe($("#conteudo"), {childList: true, subtree: true});
+  mo.observe($("#gaveta"), {childList: true, subtree: true});
+}
+
+/* ------------------------------------------------------------------ destaque no mapa e "ver no mapa"
+   Os mapas registram as camadas por chave ("area|<estado ou município>", "loc|<colégio>"). Passar o mouse numa linha
+   com data-lugar destaca o lugar; o botão data-ver rola até o mapa, dá zoom e pisca. No mapa do Brasil em SVG,
+   passar o mouse num cartão de estado destaca o estado. */
+const LUGARES = new Map();
+function registrarMapa(id, mapa) { mapa._lugarId = id; LUGARES.set(id, {mapa, chaves: new Map()}); }
+function registrar(mapa, chave, ly) {
+  const r = LUGARES.get(mapa?._lugarId); if (!r || r.mapa !== mapa || !ly) return;
+  const l = r.chaves.get(chave) || r.chaves.set(chave, []).get(chave);
+  l.push(...(typeof ly.getLayers === "function" ? ly.getLayers() : [ly]));
+}
+function camadasDe(chave) {
+  const out = [];
+  for (const r of LUGARES.values()) {
+    if (!r.mapa._loaded || !r.mapa.getContainer().isConnected) continue;
+    const lys = (r.chaves.get(chave) || []).filter(l => l._map);
+    if (lys.length) out.push({mapa: r.mapa, lys});
+  }
+  return out;
+}
+function realce(ly, liga) {
+  if (!ly._map || !ly.setStyle) return;
+  const ponto = typeof ly.getRadius === "function";
+  if (liga) {
+    if (!ly._orig) ly._orig = {color: ly.options.color, weight: ly.options.weight, opacity: ly.options.opacity, fillOpacity: ly.options.fillOpacity, raio: ponto ? ly.getRadius() : null};
+    ly.setStyle(ponto ? {color: "#ffffff", weight: 2.5, opacity: 1, fillOpacity: 1} : {color: "#ffffff", weight: 3, opacity: 1});
+    if (ponto) ly.setRadius(Math.max(ly._orig.raio * 1.5, ly._orig.raio + 4));
+    ly.bringToFront?.();
+  } else if (ly._orig) {
+    const o = ly._orig; ly._orig = null;
+    ly.setStyle({color: o.color, weight: o.weight, opacity: o.opacity, fillOpacity: o.fillOpacity});
+    if (ponto && o.raio != null) ly.setRadius(o.raio);
+  }
+}
+let lugarAtual = null, ufAtual = null;
+function trocarDestaque(chave) {
+  if (chave === lugarAtual) return;
+  if (lugarAtual) for (const {lys} of camadasDe(lugarAtual)) lys.forEach(l => realce(l, false));
+  lugarAtual = chave || null;
+  if (lugarAtual) for (const {lys} of camadasDe(lugarAtual)) lys.forEach(l => realce(l, true));
+}
+function destacarUF(uf) {
+  if (uf === ufAtual) return;
+  document.querySelectorAll("#conteudo svg path.realce").forEach(p => p.classList.remove("realce"));
+  ufAtual = uf || null;
+  if (ufAtual) document.querySelectorAll(`#conteudo svg path[data-uf="${ufAtual}"]`).forEach(p => { p.classList.add("realce"); p.parentNode.appendChild(p); });
+}
+document.addEventListener("mouseover", e => {
+  trocarDestaque(e.target.closest?.("[data-lugar]")?.dataset.lugar);
+  const u = e.target.closest?.("[data-uf]");
+  destacarUF(u && u.tagName !== "path" ? u.dataset.uf : null);
+});
+document.addEventListener("focusin", e => { const el = e.target.closest?.("[data-lugar],[data-ver]"); if (el) trocarDestaque(el.dataset.lugar || el.dataset.ver); });
+function piscar(lys, chave) {
+  let n = 0;
+  lys.forEach(l => realce(l, true));
+  const t = setInterval(() => {
+    lys.forEach(l => l._map && l.setStyle({color: n % 2 ? "#ffffff" : "#55b8e6", weight: n % 2 ? 3 : 5}));
+    if (++n > 7) { clearInterval(t); lys.forEach(l => { realce(l, false); if (lugarAtual === chave) realce(l, true); }); }
+  }, 200);
+}
+function verNoMapa(chave) {
+  const achado = typeof L === "undefined" ? null : camadasDe(chave)[0];
+  if (!achado) return;
+  const {mapa, lys} = achado;
+  const el = mapa.getContainer();
+  el.scrollIntoView({behavior: CALMO ? "auto" : "smooth", block: "center"});
+  let feito = false;
+  const fim = () => { if (feito) return; feito = true; piscar(lys, chave); if (lys.length === 1) lys[0].openTooltip?.(); };
+  const op = {animate: !CALMO, duration: 1.1};
+  setTimeout(() => {
+    mapa.once("moveend", fim);
+    if (lys.length === 1 && lys[0].getLatLng) mapa.flyTo(lys[0].getLatLng(), Math.max(mapa.getZoom(), 16), op);
+    else { const b = L.latLngBounds([]); lys.forEach(l => b.extend(l.getBounds ? l.getBounds() : l.getLatLng())); mapa.flyToBounds(b.pad(0.2), {...op, maxZoom: 12}); }
+    setTimeout(fim, 1600);
+  }, CALMO ? 0 : 280);
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest?.("[data-ver]"); if (!b) return;
+  e.preventDefault(); e.stopPropagation();
+  verNoMapa(b.dataset.ver);
+}, true);
+const btnVer = (chave, rot = "") => `<button type="button" class="ver-mapa" data-ver="${esc(chave)}" title="Ver no mapa" aria-label="Ver no mapa${rot ? ": " + esc(rot) : ""}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg><span class="t">Ver no mapa</span></button>`;
+
 const NOMES = {ac: "Acre", al: "Alagoas", ap: "Amapá", am: "Amazonas", ba: "Bahia", ce: "Ceará", df: "Distrito Federal", es: "Espírito Santo", go: "Goiás",
   ma: "Maranhão", mt: "Mato Grosso", ms: "Mato Grosso do Sul", mg: "Minas Gerais", pa: "Pará", pb: "Paraíba", pr: "Paraná", pe: "Pernambuco", pi: "Piauí",
   rj: "Rio de Janeiro", rn: "Rio Grande do Norte", rs: "Rio Grande do Sul", ro: "Rondônia", rr: "Roraima", sc: "Santa Catarina", sp: "São Paulo", se: "Sergipe", to: "Tocantins"};
@@ -373,6 +524,7 @@ async function geoUF(uf) { if (!N.geoUF.has(uf)) N.geoUF.set(uf, await api(`/${u
 function novoMapa(el) {
   if (N.mapa) { N.mapa.remove(); N.mapa = null; }
   const m = L.map(el, {preferCanvas: true, zoomSnap: 0.25, scrollWheelZoom: false, attributionControl: true});
+  registrarMapa(el.id, m); // camadas por chave para o destaque e o "ver no mapa"
   m.on("click focus", () => m.scrollWheelZoom.enable()); m.on("mouseout", () => m.scrollWheelZoom.disable());
   L.tileLayer(ESRI + "World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", {maxZoom: 16, attribution: "Esri · IBGE · TSE"}).addTo(m);
   L.tileLayer(ESRI + "World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}", {maxZoom: 16, pane: "shadowPane", opacity: 0.7}).addTo(m);
@@ -459,6 +611,7 @@ async function viewMapa(main) {
     onEachFeature: (f, l) => {
       const a = areas.get(chaveGeo(f)); if (!a) return;
       l.bindTooltip(dicaArea(a, cargo, nomeDe), {className: "dica", sticky: true});
+      registrar(m, `area|${a.id}`, l);
       l.on("click", () => ehUF(N.escopo) ? abrirCidade(N.escopo, a.id, a.nome) : irPara(a.id));
     },
   }).addTo(m);
@@ -472,7 +625,7 @@ function tabelaAreas(areas, nomeDe, cores, tipo) {
     return {a, lider: l, v: N.modo === "lider" ? (l ? div(l[1], a.validos) : null) : valorArea(a, N.modo)};
   }).sort((x, y) => (y.v ?? -1) - (x.v ?? -1));
   return `<table class="ordenavel"><thead><tr><th>${tipo === "estado" ? "Estado" : "Município"}</th><th>${N.modo === "lider" ? "Líder" : "Valor"}</th><th aria-sort="descending">%</th><th>Apurado</th></tr></thead>
-    <tbody>${linhas.map(({a, lider, v}) => `<tr data-area="${a.id}" data-nome="${esc(a.nome)}"><td>${esc(nome(a.nome))}</td>
+    <tbody>${linhas.map(({a, lider, v}) => `<tr data-area="${a.id}" data-nome="${esc(a.nome)}" data-lugar="area|${a.id}"><td>${esc(nome(a.nome))}${btnVer(`area|${a.id}`, nome(a.nome))}</td>
       <td class="lider">${lider ? `<span class="bola" style="background:${cores ? cores.get(lider[0]) || OUTRO : PALETA[0]}"></span>${esc(nome(nomeDe(lider[0])))}` : "–"}</td>
       <td data-v="${v ?? -1}">${pct(v)}</td><td data-v="${a.pctApurado}">${pct(a.pctApurado, 0)}</td></tr>`).join("")}</tbody></table>`;
 }
@@ -647,20 +800,19 @@ async function viewEscolas(main) {
     const mk = L.circleMarker([l.lat, l.lng], {radius: 4 + 10 * Math.sqrt(l.eleitores / maxEl), color: "#0b1015", weight: 1, fillColor: cor, fillOpacity: 0.85})
       .bindTooltip(`<b>${esc(nome(l.nome))}</b><br>${esc(nome(l.bairro))}<br>${l.votos.slice(0, 3).map(([n, v]) => `${esc(nome(nomeDe(n)))}: ${pct(div(v, l.validos))}`).join("<br>")}<br><span style="color:#a7adb4">Brancos ${pct(div(l.brancos, l.comp))} · Nulos ${pct(div(l.nulos, l.comp))}</span>`, {className: "dica"})
       .addTo(m);
-    pts.push([l.lat, l.lng]); marc.set(l.id, mk);
+    pts.push([l.lat, l.lng]); marc.set(l.id, mk); registrar(m, `loc|${l.id}`, mk);
   }
   if (pts.length) m.fitBounds(pts, {padding: [20, 20]}); else m.setView([-15, -50], 4);
   $("#legEsc").innerHTML = `<div class="legenda">${[...usados].map(([n, c]) => `<span><b style="background:${c};border-radius:50%"></b>${esc(n)}</span>`).join("")}<span class="nota">Cor = quem lidera no colégio · tamanho = eleitores</span></div>`;
   $("#tabEscWrap").innerHTML = `<table class="ordenavel" id="tabEsc"><thead><tr><th>Colégio</th><th aria-sort="descending">Eleitores</th><th>1º lugar</th><th>%</th><th>Brancos</th><th>Nulos</th></tr></thead><tbody>${locais.sort((a, b) => b.eleitores - a.eleitores).map(l => {
     const t = l.votos[0];
-    return `<tr data-loc="${l.id}"><td>${esc(nome(l.nome))}<br><span class="nota">${esc(nome(l.bairro))}</span></td><td data-v="${l.eleitores}">${int(l.eleitores)}</td>
+    return `<tr data-loc="${l.id}"${marc.has(l.id) ? ` data-lugar="loc|${l.id}"` : ""}><td>${esc(nome(l.nome))}${marc.has(l.id) ? btnVer(`loc|${l.id}`, nome(l.nome)) : ""}<br><span class="nota">${esc(nome(l.bairro))}</span></td><td data-v="${l.eleitores}">${int(l.eleitores)}</td>
       <td class="lider">${t ? `<span class="bola" style="background:${cores.get(t[0]) || OUTRO}"></span>${esc(nome(nomeDe(t[0])))}` : "–"}</td><td data-v="${t ? div(t[1], l.validos) : -1}">${t ? pct(div(t[1], l.validos)) : "–"}</td>
       <td data-v="${div(l.brancos, l.comp) ?? -1}">${pct(div(l.brancos, l.comp))}</td><td data-v="${div(l.nulos, l.comp) ?? -1}">${pct(div(l.nulos, l.comp))}</td></tr>`;
   }).join("")}</tbody></table>`;
   ligarTabela();
   $("#tabEsc").tBodies[0].addEventListener("click", e => {
-    const tr = e.target.closest("tr[data-loc]"); const mk = tr && marc.get(tr.dataset.loc); if (!mk) return;
-    m.setView(mk.getLatLng(), 16); mk.openTooltip(); window.scrollTo({top: $("#mapaEsc").getBoundingClientRect().top + scrollY - 70, behavior: "smooth"});
+    const tr = e.target.closest("tr[data-loc]"); if (tr && marc.has(tr.dataset.loc)) verNoMapa(`loc|${tr.dataset.loc}`);
   });
 }
 
@@ -911,6 +1063,7 @@ async function render() {
   salvarHash(); renderControles();
   const tok = N.tok = ++renderTok;
   const main = $("#conteudo");
+  obsEntrada?.disconnect();
   if (!N.D) { main.innerHTML = `<div class="vazio">Carregando dados do TSE…</div>`; return; }
   try {
     await ({resultado: viewResultado, mapa: viewMapa, todos: viewTodos, regioes: viewRegioes, cidades: viewCidades, escolas: viewEscolas, comparar: viewComparar, candidatos: viewCandidatos}[N.aba] || viewResultado)(main);
@@ -921,12 +1074,14 @@ async function render() {
 }
 async function carregar(primeira) {
   try {
-    N.D = await api("/brasil.json");
+    const D = await api("/brasil.json");
+    const mudou = D !== N.D;
+    N.D = D;
     const b = N.D.brasil;
     $("#hora").textContent = b ? (b.final ? "Totalização encerrada" : `Atualizado pelo TSE às ${(b.hora || "").split(" ")[1]?.slice(0, 5) || "–"}`) : "Aguardando o TSE";
     $("#pulso").classList.toggle("parado", !!b?.final);
     // Atualização automática só nas abas leves (não refaz mapas enquanto a pessoa navega)
-    if (primeira || ["resultado", "regioes"].includes(N.aba)) render();
+    if (primeira || (mudou && ["resultado", "regioes"].includes(N.aba))) render();
   } catch (e) { console.warn(e); if (primeira) render(); }
 }
 render();

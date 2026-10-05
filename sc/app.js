@@ -149,6 +149,176 @@ document.addEventListener("mousemove", e => {
 });
 const tipHTML = (t, linhas) => esc(`<b>${esc(t)}</b>` + linhas.map(([k, v]) => `<div class="row">${esc(k)}<em>${esc(v)}</em></div>`).join(""));
 
+/* ------------------------------------------------------------------ animações (identidade MOBI)
+   Números contam do zero até o valor quando aparecem na tela, cartões entram suavemente ao rolar e as barras crescem.
+   Sem IntersectionObserver ou com "reduzir movimento" ligado: tudo aparece direto, sem animação. */
+const CALMO = !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+const TEM_IO = "IntersectionObserver" in window;
+if (!CALMO && TEM_IO) document.documentElement.classList.add("anima");
+const NUM_RE = /\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+(?:,\d+)?/g;
+function contar(el) {
+  if (CALMO || document.hidden || !el?.isConnected) return;
+  const txt = el.textContent;
+  if (el.dataset.contou === txt) return;
+  const nos = [];
+  const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  while (w.nextNode()) { const n = w.currentNode; NUM_RE.lastIndex = 0; if (NUM_RE.test(n.nodeValue)) nos.push([n, n.nodeValue]); }
+  if (!nos.length) return;
+  el.dataset.contou = txt;
+  const fmt = (m, k) => {
+    if (/^(19|20)\d\d$/.test(m)) return m; // ano (ex.: 2026) fica como está
+    const casas = (m.split(",")[1] || "").length;
+    const v = parseFloat(m.replace(/\./g, "").replace(",", ".")) * k;
+    return v.toLocaleString("pt-BR", {minimumFractionDigits: casas, maximumFractionDigits: casas, useGrouping: m.includes(".")});
+  };
+  const t0 = performance.now(), dur = 950, ease = x => 1 - Math.pow(1 - x, 3);
+  const passo = agora => {
+    const k = ease(Math.min(1, (agora - t0) / dur));
+    if (k < 1) { for (const [n, orig] of nos) n.nodeValue = orig.replace(NUM_RE, m => fmt(m, k)); requestAnimationFrame(passo); }
+    else for (const [n, orig] of nos) n.nodeValue = orig; // valor final exatamente como veio
+  };
+  for (const [n, orig] of nos) n.nodeValue = orig.replace(NUM_RE, m => fmt(m, 0));
+  requestAnimationFrame(passo);
+}
+const ANIM_SEL = ".ao-vivo, .cabeca, .kpi, .card, .aviso, .reg-card, .cmp-card, .mini";
+const CONTA_SEL = ".kpi .val, .cmp-card .linha b, .cmp-res-num em, .barra-l .v, .reg-eu b, .reg-top li > b";
+const obsEntrada = !CALMO && TEM_IO ? new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) revelar(e.target); }), {threshold: 0.06, rootMargin: "0px 0px -3% 0px"}) : null;
+function revelar(el) {
+  obsEntrada?.unobserve(el);
+  el.classList.add("visto");
+  el.querySelectorAll("[data-conta]").forEach(n => { if (n.closest(".anim") === el) contar(n); });
+}
+const alvosDe = (raiz, sel) => [...(raiz.matches?.(sel) ? [raiz] : []), ...raiz.querySelectorAll(sel)];
+function animar(raizes) {
+  if (CALMO || S.renderAuto) return;
+  let i = 0;
+  for (const raiz of raizes) {
+    if (!raiz.isConnected || raiz.closest(".leaflet-container")) continue;
+    for (const el of alvosDe(raiz, ANIM_SEL)) {
+      if (el.classList.contains("anim") || el.closest(".gaveta, .leaflet-container")) continue;
+      el.classList.add("anim"); el.style.setProperty("--atraso", (i++ % 6) * 60 + "ms");
+      if (obsEntrada) obsEntrada.observe(el); else el.classList.add("visto");
+    }
+    for (const n of alvosDe(raiz, CONTA_SEL)) {
+      n.setAttribute("data-conta", "");
+      const a = n.closest(".anim");
+      if (!a || a.classList.contains("visto")) contar(n);
+    }
+  }
+}
+// Tudo o que entra no conteúdo (e na gaveta) passa pelas animações, sem precisar mexer em cada aba
+{
+  const fila = new Set(); let marcado = false;
+  const mo = new MutationObserver(ms => {
+    for (const m of ms) for (const n of m.addedNodes) if (n.nodeType === 1) fila.add(n);
+    if (!marcado && fila.size) { marcado = true; queueMicrotask(() => { marcado = false; const ns = [...fila]; fila.clear(); animar(ns); }); }
+  });
+  mo.observe($("#conteudo"), {childList: true, subtree: true});
+  mo.observe($("#gavetaCorpo"), {childList: true, subtree: true});
+}
+
+/* ------------------------------------------------------------------ "ver no mapa": registro das camadas por chave
+   Cada mapa registra as suas camadas por chave (ex.: "mun|<código>", "esc|<local>", "bai|<bairro>"). Passar o mouse
+   num item com data-lugar destaca o lugar no mapa; o botão data-ver rola até o mapa, dá zoom e pisca o lugar. */
+const LUGARES = new Map(); // id do mapa -> {mapa, chaves: Map(chave -> [camadas])}
+function registrarMapa(id, mapa) { if (!mapa) return; mapa._lugarId = id; LUGARES.set(id, {mapa, chaves: new Map()}); }
+function registrar(mapa, chave, ly) {
+  const r = LUGARES.get(mapa?._lugarId); if (!r || r.mapa !== mapa || !ly) return;
+  const lys = typeof ly.getLayers === "function" ? ly.getLayers() : [ly];
+  const l = r.chaves.get(chave) || r.chaves.set(chave, []).get(chave);
+  l.push(...lys);
+}
+// Só os mapas que estão na tela agora; polígonos (áreas) primeiro, depois pontos
+function camadasDe(chave) {
+  const out = [];
+  for (const r of LUGARES.values()) {
+    if (!r.mapa._loaded || !r.mapa.getContainer().isConnected) continue;
+    const lys = (r.chaves.get(chave) || []).filter(l => l._map);
+    if (lys.length) out.push({mapa: r.mapa, lys, area: lys.some(l => !l.getLatLng)});
+  }
+  return out.sort((a, b) => b.area - a.area);
+}
+function realce(ly, liga) {
+  if (!ly._map || !ly.setStyle) return;
+  const ponto = typeof ly.getRadius === "function";
+  if (liga) {
+    if (!ly._orig) ly._orig = {color: ly.options.color, weight: ly.options.weight, opacity: ly.options.opacity, fillOpacity: ly.options.fillOpacity, raio: ponto ? ly.getRadius() : null};
+    ly.setStyle(ponto ? {color: "#ffffff", weight: 2.5, opacity: 1, fillOpacity: 1} : {color: "#ffffff", weight: 3, opacity: 1});
+    if (ponto) ly.setRadius(Math.max(ly._orig.raio * 1.5, ly._orig.raio + 4));
+    ly.bringToFront?.();
+  } else if (ly._orig) {
+    const o = ly._orig; ly._orig = null;
+    ly.setStyle({color: o.color, weight: o.weight, opacity: o.opacity, fillOpacity: o.fillOpacity});
+    if (ponto && o.raio != null) ly.setRadius(o.raio);
+  }
+}
+let lugarAtual = null;
+function destacar(chave, liga) { for (const {lys} of camadasDe(chave)) lys.forEach(l => realce(l, liga)); }
+function trocarDestaque(chave) {
+  if (chave === lugarAtual) return;
+  if (lugarAtual) destacar(lugarAtual, false);
+  lugarAtual = chave || null;
+  if (lugarAtual) destacar(lugarAtual, true);
+}
+document.addEventListener("mouseover", e => trocarDestaque(e.target.closest?.("[data-lugar]")?.dataset.lugar));
+document.addEventListener("focusin", e => { const el = e.target.closest?.("[data-lugar],[data-ver]"); if (el) trocarDestaque(el.dataset.lugar || el.dataset.ver); });
+function piscar(lys, chave) {
+  let n = 0;
+  lys.forEach(l => realce(l, true));
+  const t = setInterval(() => {
+    lys.forEach(l => l._map && l.setStyle({color: n % 2 ? "#ffffff" : `rgb(${BRAND_RGB})`, weight: n % 2 ? 3 : 5}));
+    if (++n > 7) { clearInterval(t); lys.forEach(l => { realce(l, false); if (lugarAtual === chave) realce(l, true); }); }
+  }, 200);
+}
+function limitesDe(lys) {
+  const b = L.latLngBounds([]);
+  for (const l of lys) b.extend(l.getBounds ? l.getBounds() : l.getLatLng());
+  return b;
+}
+function verNoMapa(chave, semDesvio) {
+  const achados = typeof L === "undefined" ? [] : camadasDe(chave);
+  if (!achados.length) { if (!semDesvio) irAoMapa(chave); return; }
+  const {mapa, lys} = achados[0];
+  (mapa.getContainer().closest(".card") || mapa.getContainer()).scrollIntoView({behavior: CALMO ? "auto" : "smooth", block: "center"});
+  let feito = false;
+  const fim = () => {
+    if (feito) return; feito = true;
+    // mapas das cidades andam juntos: os outros acompanham o mapa que voou
+    if (typeof CID !== "undefined" && CID.mapas.includes(mapa)) {
+      const c = mapa.getCenter(), z = mapa.getZoom();
+      S.views[`cid${S.cidade}`] = {c, z};
+      for (const o of CID.mapas) if (o !== mapa) o.setView(c, z, {animate: false});
+    }
+    for (const x of achados) piscar(x.lys, chave);
+    if (lys.length === 1) lys[0].openTooltip?.();
+  };
+  const ponto = lys.length === 1 && lys[0].getLatLng;
+  const op = {animate: !CALMO, duration: 1.1};
+  setTimeout(() => {
+    mapa.once("moveend", fim);
+    if (ponto) mapa.flyTo(lys[0].getLatLng(), Math.max(mapa.getZoom(), 15), op);
+    else mapa.flyToBounds(limitesDe(lys).pad(0.25), {...op, maxZoom: 15});
+    setTimeout(fim, 1600);
+  }, CALMO ? 0 : 280);
+}
+// Lugar que não está num mapa desta tela: abre a aba Mapa do estado já no lugar
+function irAoMapa(chave) {
+  const tipo = chave.split("|")[0];
+  if (tipo !== "mun" && tipo !== "esc") return;
+  S.aba = "mapa"; lsSet("apu.aba", "mapa");
+  S.mapaModo = tipo; lsSet("apu.mapa", tipo);
+  S.pendVer = chave;
+  render();
+  $("#conteudo").scrollIntoView({behavior: CALMO ? "auto" : "smooth", block: "start"});
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest?.("[data-ver]"); if (!b) return;
+  e.preventDefault(); e.stopPropagation();
+  verNoMapa(b.dataset.ver);
+}, true);
+const ICONE_PIN = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>`;
+const btnVer = (chave, rot = "") => `<button type="button" class="ver-mapa" data-ver="${esc(chave)}" title="Ver no mapa" aria-label="Ver no mapa${rot ? ": " + esc(rot) : ""}">${ICONE_PIN}<span class="t">Ver no mapa</span></button>`;
+
 /* ------------------------------------------------------------------ topo: chips e adicionar */
 function renderChips() {
   $("#chips").innerHTML = S.sel.map(s => {
@@ -258,10 +428,10 @@ S.ativoSel = () => S.sel.find(s => chave(s) === S.ativo);
 
 function barras(itens, {max, onclick} = {}) {
   const m = max ?? Math.max(1, ...itens.flatMap(i => i.valores.map(v => v.v)));
-  return `<div class="barras">${itens.map((it, i) => `<div class="barra-l ${onclick ? "clicavel" : ""} ${it.eu ? "eu" : ""}" ${onclick ? `data-i="${i}"` : ""} ${it.tip ? `data-tip="${it.tip}"` : ""}>
+  return `<div class="barras">${itens.map((it, i) => `<div class="barra-l ${onclick ? "clicavel" : ""} ${it.eu ? "eu" : ""}" ${onclick ? `data-i="${i}"` : ""} ${it.tip ? `data-tip="${it.tip}"` : ""}${it.lugar ? ` data-lugar="${esc(it.lugar)}"` : ""}>
     <span class="rot${it.ico ? " com-ico" : ""}" title="${esc(it.rot)}">${it.ico ? `${it.ico}<span class="t">${esc(it.rot)}${it.sub ? `<small>${esc(it.sub)}</small>` : ""}</span>` : `${esc(it.rot)}${it.sub ? `<small>${esc(it.sub)}</small>` : ""}`}</span>
     <span class="trilhos">${it.valores.map(v => `<span class="trilho"><i style="width:${Math.max(0.3, v.v / m * 100)}%;background:${v.cor}"></i></span>`).join("")}</span>
-    <span class="v">${it.valores.map(v => v.txt ?? int(v.v)).join(" · ")}${it.extra ? `<small>${esc(it.extra)}</small>` : ""}</span>
+    <span class="v">${it.valores.map(v => v.txt ?? int(v.v)).join(" · ")}${it.extra ? `<small>${esc(it.extra)}</small>` : ""}${it.lugar ? btnVer(it.lugar, it.rot) : ""}</span>
   </div>`).join("")}</div>`;
 }
 
@@ -306,7 +476,7 @@ function viewGeral(s, c, d) {
   if (!ap.secoes) h += `<div class="aviso"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg><span>Os mapas e gráficos por município, zona e escola são montados a partir dos <b>boletins de urna</b> de cada seção, que o TSE publica conforme as urnas são transmitidas. Assim que a apuração começar, eles aparecem aqui sozinhos.</span></div>`;
 
   const top = muns.slice(0, 15).map(m => ({rot: titulo(m.nome), valores: [{v: m.votos, cor: corDe(s)}], extra: pct(div(m.votos, m.validos)),
-    tip: tipHTML(titulo(m.nome), [["Votos", int(m.votos)], ["% dos válidos", pct(div(m.votos, m.validos), 2)], ["Seções apuradas", int(m.secoes)]]), mun: m.mun}));
+    tip: tipHTML(titulo(m.nome), [["Votos", int(m.votos)], ["% dos válidos", pct(div(m.votos, m.validos), 2)], ["Seções apuradas", int(m.secoes)]]), mun: m.mun, lugar: `mun|${m.mun}`}));
   const redutos = d.municipios.filter(m => m.validos >= 300 && m.votos > 0).map(m => ({...m, p: m.votos / m.validos})).sort((a, b) => b.p - a.p).slice(0, 10);
 
   // Ranking: vizinhos de posição
@@ -329,7 +499,7 @@ function viewGeral(s, c, d) {
   if (redutos.length) {
     h += `<div class="grid-2">
       <section class="card vidro"><h2>Redutos: maior % dos válidos</h2><p class="desc">Municípios com ao menos 300 votos válidos apurados, ordenados pela fatia do candidato. Média no estado (apurado): ${pct(media, 2)}.</p>
-        <div id="gRedutos">${barras(redutos.map(m => ({rot: titulo(m.nome), valores: [{v: m.p, cor: corDe(s), txt: pct(m.p, 1)}], extra: `${int(m.votos)} votos · ${(m.p / media).toLocaleString("pt-BR", {maximumFractionDigits: 1})}× a média`, mun: m.mun})), {onclick: true})}</div></section>
+        <div id="gRedutos">${barras(redutos.map(m => ({rot: titulo(m.nome), valores: [{v: m.p, cor: corDe(s), txt: pct(m.p, 1)}], extra: `${int(m.votos)} votos · ${(m.p / media).toLocaleString("pt-BR", {maximumFractionDigits: 1})}× a média`, mun: m.mun, lugar: `mun|${m.mun}`})), {onclick: true})}</div></section>
       <section class="card vidro"><h2>Concentração do voto</h2><p class="desc">Quanto do total vem dos maiores municípios.</p>
         ${barras([1, 5, 10, 20, 50].map(n => ({rot: `Top ${n} município${n > 1 ? "s" : ""}`, valores: [{v: share(n) || 0, cor: corDe(s), txt: pct(share(n), 0)}]})), {max: 1})}
         <p class="nota" style="margin-top:12px">${int(locais.length)} escolas e ${int(muns.length)} municípios com pelo menos um voto.</p></section>
@@ -374,6 +544,7 @@ async function viewMapa(s, c, d) {
   if (MAPA) MAPA.remove();
   // Roda do mouse só dá zoom depois de clicar no mapa (não sequestra a rolagem da página)
   MAPA = L.map(el, {preferCanvas: true, zoomSnap: 0.25, scrollWheelZoom: false});
+  registrarMapa("mapaL", MAPA);
   MAPA.on("click focus", () => MAPA.scrollWheelZoom.enable());
   MAPA.on("mouseout", () => MAPA.scrollWheelZoom.disable());
   // Primeira abertura: enquadra os pontos com voto (ou o estado); depois preserva a visão do usuário
@@ -400,7 +571,7 @@ async function viewMapa(s, c, d) {
       onEachFeature: (f, lyr) => {
         const m = porIbge.get(String(f.properties.codarea));
         lyr.bindTooltip(m ? `<b>${esc(titulo(m.nome))}</b><br>${int(m.votos)} votos · ${pct(div(m.votos, m.validos), 2)}<br><span style="opacity:.7">${int(m.secoes)} seções · ${pct(apurado(m.aptos, m.eleitores), 0)} apurado</span>` : "Sem seções apuradas", {sticky: true, className: "tip-l"});
-        if (m) lyr.on("click", () => abrirMunicipio(m.mun));
+        if (m) { lyr.on("click", () => abrirMunicipio(m.mun)); registrar(MAPA, `mun|${m.mun}`, lyr); }
         lyr.on("mouseover", () => lyr.setStyle({weight: 2, color: "#fff"}));
         lyr.on("mouseout", () => CAMADA.resetStyle(lyr));
       },
@@ -418,11 +589,14 @@ async function viewMapa(s, c, d) {
         fillColor: RAMPA[classe(p, q)], fillOpacity: 0.9});
       mk.bindTooltip(`<b>${esc(titulo(l.nome))}</b><br>${esc(titulo(l.munNome))}${l.bairro ? " · " + esc(titulo(l.bairro)) : ""}<br>${int(l.votos)} votos · ${pct(p, 2)} dos válidos${l.aproximado ? `<br><span style="opacity:.7">posição aproximada (centro do município)</span>` : ""}`, {className: "tip-l"});
       mk.on("click", () => abrirLocal(l.id));
+      registrar(MAPA, `esc|${l.id}`, mk);
       return mk;
     })).addTo(MAPA);
     $("#mapaEscala").innerHTML = escalaHTML(q, "% dos válidos (cor) · tamanho = votos") +
       (pts.length ? "" : `<span class="nota">Nenhuma escola com voto apurado ainda.</span>`);
   }
+  // "Ver no mapa" vindo de outra aba (municípios, escolas, visão geral)
+  if (S.pendVer) { const k = S.pendVer; S.pendVer = null; setTimeout(() => verNoMapa(k, true), 120); }
 }
 function escalaHTML(q, rot) {
   if (!q.length) return `<span class="nota">${esc(rot)}: sem dados ainda</span>`;
@@ -431,7 +605,7 @@ function escalaHTML(q, rot) {
 }
 
 /* ------------------------------------------------------------------ tabelas */
-function tabela({cols, linhas, est, porPag = 50, onRow}) {
+function tabela({cols, linhas, est, porPag = 50, onRow, lugar}) {
   const ord = cols.find(c => c.k === est.ord) || cols[0];
   const ordenadas = linhas.slice().sort((a, b) => {
     const va = ord.val ? ord.val(a) : a[ord.k], vb = ord.val ? ord.val(b) : b[ord.k];
@@ -441,7 +615,7 @@ function tabela({cols, linhas, est, porPag = 50, onRow}) {
   est.pag = Math.min(est.pag, pags - 1);
   const vis = ordenadas.slice(est.pag * porPag, (est.pag + 1) * porPag);
   const html = `<div class="tbl-wrap"><table><thead><tr>${cols.map(c => `<th class="ord ${c.n ? "n" : ""}" data-k="${c.k}"${c.thAttr ? " " + c.thAttr : ""}>${c.th ?? esc(c.t)}<span class="seta">${est.ord === c.k ? (est.dir < 0 ? "↓" : "↑") : ""}</span></th>`).join("")}</tr></thead>
-    <tbody>${vis.map((l, i) => `<tr class="${onRow ? "clicavel" : ""}" data-i="${est.pag * porPag + i}">${cols.map(c => `<td class="${c.n ? "n" : ""} ${c.cls || ""}"${c.attr ? " " + c.attr(l) : ""}>${c.f ? c.f(l) : esc(l[c.k])}</td>`).join("")}</tr>`).join("")
+    <tbody>${vis.map((l, i) => `<tr class="${onRow ? "clicavel" : ""}" data-i="${est.pag * porPag + i}"${lugar && lugar(l) ? ` data-lugar="${esc(lugar(l))}"` : ""}>${cols.map(c => `<td class="${c.n ? "n" : ""} ${c.cls || ""}"${c.attr ? " " + c.attr(l) : ""}>${c.f ? c.f(l) : esc(l[c.k])}</td>`).join("")}</tr>`).join("")
       || `<tr><td colspan="${cols.length}"><div class="vazio-estado"><b>Nada por aqui ainda</b>Os dados aparecem conforme os boletins de urna são publicados.</div></td></tr>`}</tbody></table></div>
     <div class="paginacao"><span>${int(ordenadas.length)} linhas · página ${est.pag + 1} de ${pags}</span>
       <button data-p="-1" ${est.pag === 0 ? "disabled" : ""} aria-label="Anterior">‹</button><button data-p="1" ${est.pag >= pags - 1 ? "disabled" : ""} aria-label="Próxima">›</button></div>`;
@@ -467,8 +641,8 @@ function viewMunicipios(s, c, d) {
   const desenhar = () => {
     const q = norm(est.q);
     const linhas = d.municipios.filter(m => !q || norm(m.nome).includes(q)).map(m => ({...m, p: div(m.votos, m.validos), share: div(m.votos, total), ap: apurado(m.aptos, m.eleitores)}));
-    const t = tabela({est, linhas, onRow: m => abrirMunicipio(m.mun), cols: [
-      {k: "nome", t: "Município", f: m => `<span class="forte">${esc(titulo(m.nome))}</span>`},
+    const t = tabela({est, linhas, onRow: m => abrirMunicipio(m.mun), lugar: m => `mun|${m.mun}`, cols: [
+      {k: "nome", t: "Município", f: m => `<span class="forte">${esc(titulo(m.nome))}</span>${m.votos > 0 ? btnVer(`mun|${m.mun}`, titulo(m.nome)) : ""}`},
       {k: "votos", t: "Votos", n: 1, f: m => int(m.votos)},
       {k: "p", t: "% válidos", n: 1, f: m => pct(m.p, 2)},
       {k: "share", t: "% do total", n: 1, f: m => pct(m.share, 1)},
@@ -499,8 +673,8 @@ function viewEscolas(s, c, d) {
     const q = norm(est.q);
     const linhas = d.locais.filter(l => (!est.mun || String(l.mun) === String(est.mun)) && (!q || norm(l.nome).includes(q) || norm(l.bairro).includes(q)))
       .map(l => ({...l, p: div(l.votos, l.validos), ap: apurado(l.aptos, l.eleitores)}));
-    const t = tabela({est, linhas, onRow: l => abrirLocal(l.id), cols: [
-      {k: "nome", t: "Escola", f: l => `<span class="forte">${esc(titulo(l.nome))}</span>`},
+    const t = tabela({est, linhas, onRow: l => abrirLocal(l.id), lugar: l => `esc|${l.id}`, cols: [
+      {k: "nome", t: "Escola", f: l => `<span class="forte">${esc(titulo(l.nome))}</span>${l.lat != null && l.votos > 0 ? btnVer(`esc|${l.id}`, titulo(l.nome)) : ""}`},
       {k: "bairro", t: "Bairro", f: l => esc(titulo(l.bairro))},
       {k: "munNome", t: "Município", f: l => esc(titulo(l.munNome))},
       {k: "votos", t: "Votos", n: 1, f: l => int(l.votos)},
@@ -753,22 +927,18 @@ async function viewCompararCidade(itens) {
   const desenharB = () => {
     const q = norm(CMPC.bai.q);
     const linhas = listaB.filter(b => !q || norm(b.nome).includes(q));
-    const t = tabela({est: CMPC.bai, linhas, porPag: 25, onRow: b => trocarBairro(b.nome, true), cols: [
-      {k: "nome", t: rotB[2], f: b => `<span class="forte">${esc(b.nome)}</span>${b.nome === CMPC.bairro ? ` <span class="tag">filtrado</span>` : ""}<br><span class="nota">${plural(b.nEsc, "escola", "escolas")}</span>`},
+    const t = tabela({est: CMPC.bai, linhas, porPag: 25, onRow: b => trocarBairro(b.nome, true), lugar: b => `cbai|${b.nome}`, cols: [
+      {k: "nome", t: rotB[2], f: b => `<span class="forte">${esc(b.nome)}</span>${b.nome === CMPC.bairro ? ` <span class="tag">filtrado</span>` : ""}<br><span class="nota">${plural(b.nEsc, "escola", "escolas")}</span>${btnVer(`cbai|${b.nome}`, b.nome)}`},
       ...colsCand(), colVence,
       {k: "total", t: "Soma", n: 1, f: b => int(b.total)},
     ]});
     $("#cmpTabB").innerHTML = t.html; t.ligar($("#cmpTabB"), desenharB);
   };
-  const marcadores = new Map();
   const desenharE = () => {
     const q = norm(CMPC.esc.q);
     const linhas = escolas.filter(l => (!CMPC.bairro || l.area === CMPC.bairro) && (!q || norm(l.nome).includes(q) || norm(l.area).includes(q) || norm(l.bairro).includes(q)));
-    const t = tabela({est: CMPC.esc, linhas, porPag: 40, onRow: l => {
-      const mk = marcadores.get(l.id);
-      if (mk && CMPC.mapa) { $("#mCmp")?.scrollIntoView({block: "center"}); CMPC.mapa.setView(mk.getLatLng(), 16, {animate: false}); mk.openTooltip(); }
-    }, cols: [
-      {k: "nome", t: "Escola", f: l => `<span class="forte">${esc(titulo(l.nome))}</span><br><span class="nota">${esc(l.area)} · Zona ${esc(l.zona)}</span>`},
+    const t = tabela({est: CMPC.esc, linhas, porPag: 40, lugar: l => `cesc|${l.id}`, onRow: l => { if (l.lat != null) verNoMapa(`cesc|${l.id}`, true); }, cols: [
+      {k: "nome", t: "Escola", f: l => `<span class="forte">${esc(titulo(l.nome))}</span><br><span class="nota">${esc(l.area)} · Zona ${esc(l.zona)}</span>${l.lat != null ? btnVer(`cesc|${l.id}`, titulo(l.nome)) : ""}`},
       ...colsCand(), colVence,
       ...(itens.length > 1 ? [{k: "dif", t: "Diferença", n: 1, val: l => l.apurada ? l.dif : -1e12,
         th: `Diferença<small class="th-sub">${esc(nomeI(0))} − ${esc(nomeI(1))}</small>`,
@@ -808,6 +978,7 @@ async function viewCompararCidade(itens) {
       lyr.on("mouseover", () => lyr.setStyle({weight: 2, color: "#fff"}));
       lyr.on("mouseout", () => lyr.setStyle(estilo()));
       if (b) lyr.on("click", () => trocarBairro(a.nome === CMPC.bairro ? "" : a.nome));
+      registrar(m, `cbai|${a.nome}`, lyr);
     }
   }
   contornoMunicipio(m, geomMun);
@@ -817,7 +988,8 @@ async function viewCompararCidade(itens) {
     const mk = L.circleMarker([l.lat, l.lng], {radius: l.total ? 3 + 11 * Math.sqrt(l.total / max) : 2.5, weight: 1, color: "#090d11",
       fillColor: l.venc >= 0 ? corI(l.venc) : "#4a525b", fillOpacity: fora ? 0.25 : l.venc >= 0 ? 0.92 : 0.5, opacity: fora ? 0.3 : 1}).addTo(m);
     mk.bindTooltip(tipCmp(titulo(l.nome), `${l.area}${l.aproximado ? " · posição aproximada" : ""}`, l.vs, l.venc), {className: "tip-l"});
-    marcadores.set(l.id, mk);
+    registrar(m, `cesc|${l.id}`, mk);
+    if (!l.aproximado) registrar(m, `cbai|${l.area}`, mk);
   }
   const aprox = escolas.filter(l => l.aproximado).length;
   $("#mCmp-nota").textContent = `${int(comPos.length)} escolas no mapa.` + (aprox ? ` ${aprox} sem coordenada confiável no cadastro do TSE aparecem no centro da cidade.` : "")
@@ -976,8 +1148,10 @@ function render(auto = false) {
   if (auto && window.apiEstatica && S.status) return;
   // Atualização automática no meio de uma interação com tabela/mapa: só redesenha se a aba não for o mapa
   if (auto && S.aba === "mapa" && MAPA) { atualizarMapaSilencioso(); return; }
+  S.renderAuto = auto;
   const main = $("#conteudo");
   limparMapas();
+  obsEntrada?.disconnect();
   main.innerHTML = faixaAoVivo();
   if (!S.status) { main.innerHTML = vazio("Carregando…", "Conectando ao TSE."); return; }
   if (S.aba === "comparar") return viewComparar();

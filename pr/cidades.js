@@ -109,6 +109,7 @@ function criarMapa(id, bounds) {
   const el = document.getElementById(id);
   if (!el || typeof L === "undefined") return null;
   const m = L.map(el, {preferCanvas: true, zoomSnap: 0.25, scrollWheelZoom: false});
+  registrarMapa(id, m); // camadas por chave para o destaque e o "ver no mapa"
   m.on("click", () => m.scrollWheelZoom.enable());
   m.on("mouseout", () => m.scrollWheelZoom.disable());
   const v = S.views[`cid${S.cidade}`];
@@ -170,11 +171,15 @@ function camadaAreas(m, itens, q, onClick) {
     lyr.on("mouseover", () => lyr.setStyle({weight: 2, color: "#fff"}));
     lyr.on("mouseout", () => lyr.setStyle(estiloArea(it.a, q, it.borda)));
     if (onClick) lyr.on("click", () => onClick(it));
+    if (it.chave) registrar(m, it.chave, lyr);
   }
 }
 function contornoMunicipio(m, geom) {
   if (geom) L.geoJSON(geom, {style: {fill: false, weight: 1.6, color: `rgba(${BRAND_RGB},0.85)`}, interactive: false}).addTo(m);
 }
+
+// chave do bairro para o destaque no mapa: o nome do cadastro do TSE e o do OpenStreetMap, sem acento
+const chaveBairro = nome => `bai|${norm(titulo(String(nome || "Sem bairro").trim()))}`;
 
 /* ---------- gaveta: lista de escolas de uma área */
 function abrirListaEscolas(trilha, titulo_, sub, locais, s) {
@@ -335,6 +340,8 @@ async function viewCidades(s, c, d) {
           fillColor: l.validos ? RAMPA[classe(p, q)] : "#4a525b", fillOpacity: l.validos ? 0.92 : 0.6}).addTo(m);
         mk.bindTooltip(`<b>${esc(titulo(l.nome))}</b>${l.bairro ? "<br>" + esc(titulo(l.bairro)) : ""}<br>${l.validos ? `${int(l.votos)} votos · ${pct(p, 2)} dos válidos` : "sem boletim ainda"}<br><span style="opacity:.7">Zona ${l.zona} · ${pct(apurado(l.aptos, l.eleitores), 0)} apurado${l.aproximado ? " · posição aproximada" : ""}</span>`, {className: "tip-l"});
         mk.on("click", () => abrirLocal(l.id));
+        registrar(m, `esc|${l.id}`, mk);
+        if (!l.aproximado) { registrar(m, chaveBairro(l.bairro), mk); registrar(m, `zona|${l.zona}`, mk); }
       }
       $("#mEsc-esc").innerHTML = escalaHTML(q, "% dos válidos");
       if (aprox) $("#mEsc-nota").textContent = `${aprox} local(is) sem coordenada confiável no cadastro do TSE aparecem no centro da cidade.`;
@@ -378,7 +385,7 @@ async function viewCidades(s, c, d) {
       const ls = locais.filter(l => l.zona === z.zona);
       return {geometry: {type: "MultiPolygon", coordinates: z.geom}, nome: `Zona ${z.zona}`,
         a: {votos: ls.reduce((t, l) => t + l.votos, 0), validos: ls.reduce((t, l) => t + l.validos, 0), locais: ls,
-          aptos: ls.reduce((t, l) => t + l.aptos, 0), eleitores: ls.reduce((t, l) => t + l.eleitores, 0)}, zona: z.zona};
+          aptos: ls.reduce((t, l) => t + l.aptos, 0), eleitores: ls.reduce((t, l) => t + l.eleitores, 0)}, zona: z.zona, chave: `zona|${z.zona}`};
     });
     const qz = quebras(zItens.filter(i => i.a.validos).map(i => div(i.a.votos, i.a.validos)));
     const mz = criarMapa("mZon", bounds);
@@ -404,18 +411,18 @@ async function viewCidades(s, c, d) {
     o.votos += l.votos; o.validos += l.validos; o.aptos += l.aptos; o.eleitores += l.eleitores; o.locais.push(l);
   }
   const bTop = [...porBairro.values()].filter(b => b.votos > 0).sort((a, b) => b.votos - a.votos).slice(0, 15);
-  $("#cidBaiTop").innerHTML = bTop.length ? barras(bTop.map(b => ({rot: b.rot, valores: [{v: b.votos, cor: corDe(s)}], extra: pct(div(b.votos, b.validos), 1)})), {onclick: true})
+  $("#cidBaiTop").innerHTML = bTop.length ? barras(bTop.map(b => ({rot: b.rot, lugar: chaveBairro(b.rot), valores: [{v: b.votos, cor: corDe(s)}], extra: pct(div(b.votos, b.validos), 1)})), {onclick: true})
     : `<div class="vazio-estado"><b>Ainda sem boletins</b>Aparece com as primeiras seções da cidade.</div>`;
   // Andamento da apuração por bairro (maiores bairros em eleitorado primeiro)
   const andamento = [...porBairro.values()].filter(b => b.eleitores > 0).sort((a, b) => b.eleitores - a.eleitores).slice(0, 30);
   $("#cidAnd").innerHTML = barras(andamento.map(b => { const f = apurado(b.aptos, b.eleitores) || 0;
-    return {rot: b.rot, valores: [{v: f, cor: CORES[0], txt: pct(f, 0)}], extra: `falta ${pct(1 - f, 0)} · ${int(b.eleitores)} eleitores`}; }), {max: 1, onclick: true});
+    return {rot: b.rot, lugar: chaveBairro(b.rot), valores: [{v: f, cor: CORES[0], txt: pct(f, 0)}], extra: `falta ${pct(1 - f, 0)} · ${int(b.eleitores)} eleitores`}; }), {max: 1, onclick: true});
   $("#cidAnd").addEventListener("click", e => { const r = e.target.closest("[data-i]"); if (r) { const b = andamento[r.dataset.i]; abrirListaEscolas(`Bairro · ${titulo(info.nome)}`, b.rot, titulo(info.nome), b.locais, s); } });
   $("#cidBaiTop").addEventListener("click", e => { const r = e.target.closest("[data-i]"); if (r) { const b = bTop[r.dataset.i]; abrirListaEscolas(`Bairro · ${titulo(info.nome)}`, b.rot, titulo(info.nome), b.locais, s); } });
   const zMap = new Map();
   for (const l of locais) { const o = zMap.get(l.zona) || zMap.set(l.zona, {zona: l.zona, votos: 0, validos: 0, aptos: 0, eleitores: 0, locais: []}).get(l.zona); o.votos += l.votos; o.validos += l.validos; o.aptos += l.aptos; o.eleitores += l.eleitores; o.locais.push(l); }
   const zTop = [...zMap.values()].sort((a, b) => b.votos - a.votos || a.zona - b.zona);
-  $("#cidZonTop").innerHTML = barras(zTop.map(z => ({rot: `Zona ${z.zona}`, sub: `${z.locais.length} escolas`, valores: [{v: z.votos, cor: corDe(s)}], extra: `${z.validos ? pct(div(z.votos, z.validos), 1) : "–"} · ${pct(apurado(z.aptos, z.eleitores), 0)} apurado`})), {onclick: true});
+  $("#cidZonTop").innerHTML = barras(zTop.map(z => ({rot: `Zona ${z.zona}`, lugar: `zona|${z.zona}`, sub: `${z.locais.length} escolas`, valores: [{v: z.votos, cor: corDe(s)}], extra: `${z.validos ? pct(div(z.votos, z.validos), 1) : "–"} · ${pct(apurado(z.aptos, z.eleitores), 0)} apurado`})), {onclick: true});
   $("#cidZonTop").addEventListener("click", e => { const r = e.target.closest("[data-i]"); if (r) { const z = zTop[r.dataset.i]; abrirListaEscolas(`Zona · ${titulo(info.nome)}`, `Zona ${z.zona}`, titulo(info.nome), z.locais, s); } });
 
   // 3) Bairros e 4) Regionais (OpenStreetMap; pode demorar na primeira vez de uma cidade)
@@ -434,7 +441,7 @@ async function viewCidades(s, c, d) {
     const q = quebras(areas.filter(a => a.validos).map(a => div(a.votos, a.validos)));
     const m = criarMapa(id, bounds);
     if (!m) return;
-    camadaAreas(m, areas.map(a => ({geometry: a.f.geometry, nome: a.f.properties.nome, a})), q,
+    camadaAreas(m, areas.map(a => ({geometry: a.f.geometry, nome: a.f.properties.nome, a, chave: id === "mBai" ? chaveBairro(a.f.properties.nome) : null})), q,
       it => abrirListaEscolas(`${rotulo === "bairros" ? "Bairro" : "Regional"} · ${titulo(info.nome)}`, it.nome, titulo(info.nome), it.a.locais, s));
     contornoMunicipio(m, geomMun);
     $(`#${id}-esc`).innerHTML = escalaHTML(q, "% dos válidos");

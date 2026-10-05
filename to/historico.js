@@ -50,7 +50,7 @@ async function viewHistorico() {
   html += `<div class="grid-2">
     <section class="card vidro"><h2>Principais redutos de ${ant.candidato.ano}</h2><p class="desc">As 15 cidades onde ${esc(nomeAnt)} teve mais votos, com a votação atual de ${esc(nomeNovo)}.</p>
       <div class="legend"><span><i style="width:10px;height:10px;border-radius:3px;background:${corAnt};display:inline-block"></i>${esc(nomeAnt)} ${ant.candidato.ano}</span><span><i style="width:10px;height:10px;border-radius:3px;background:${corNovo};display:inline-block"></i>${esc(nomeNovo)} 2026</span></div>
-      <div id="hTop">${barras(top.map(l => ({rot: l.nome, mun: l.mun, valores: [{v: l.ant, cor: corAnt}, {v: l.novo, cor: corNovo}],
+      <div id="hTop">${barras(top.map(l => ({rot: l.nome, mun: l.mun, lugar: `hmun|${l.mun}`, valores: [{v: l.ant, cor: corAnt}, {v: l.novo, cor: corNovo}],
         extra: l.apurado ? `retenção ${pct(l.ret, 0)}` : "aguardando"})), {onclick: true})}</div></section>
     <section class="card vidro"><h2>Mapa da retenção</h2><p class="desc">Quanto dos votos de ${ant.candidato.ano} ${esc(nomeNovo)} já tem em cada cidade (só cidades apuradas).</p>
       <div class="escala" id="hEsc"></div><div class="mapa-c" id="hMapa" style="height:520px"></div></section>
@@ -64,8 +64,8 @@ async function viewHistorico() {
 
   const desenhar = () => {
     const q = norm(HIST.est.q);
-    const t = tabela({est: HIST.est, linhas: linhas.filter(l => !q || norm(l.nome).includes(q)), onRow: l => abrirMunicipio(l.mun), cols: [
-      {k: "nome", t: "Cidade", f: l => `<span class="forte">${esc(l.nome)}</span>`},
+    const t = tabela({est: HIST.est, linhas: linhas.filter(l => !q || norm(l.nome).includes(q)), onRow: l => abrirMunicipio(l.mun), lugar: l => `hmun|${l.mun}`, cols: [
+      {k: "nome", t: "Cidade", f: l => `<span class="forte">${esc(l.nome)}</span>${btnVer(`hmun|${l.mun}`, l.nome)}`},
       {k: "ant", t: `${nomeAnt} ${ant.candidato.ano}`, n: 1, f: l => int(l.ant)},
       {k: "antPct", t: "% válidos", n: 1, f: l => pct(l.antPct, 2)},
       {k: "novo", t: `${nomeNovo} 2026`, n: 1, f: l => l.apurado ? int(l.novo) : "–"},
@@ -84,6 +84,7 @@ async function viewHistorico() {
   if (typeof L === "undefined") return;
   HIST.mapa?.remove();
   const m = HIST.mapa = L.map("hMapa", {preferCanvas: true, zoomSnap: 0.25, scrollWheelZoom: false});
+  registrarMapa("hMapa", m);
   m.on("click", () => m.scrollWheelZoom.enable());
   m.fitBounds(caixaEstado(), {padding: [10, 10]});
   L.tileLayer(ESRI_CANVAS + "World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", {maxZoom: 16, attribution: "Esri · TSE · IBGE"}).addTo(m);
@@ -101,6 +102,7 @@ async function viewHistorico() {
       if (!l) return;
       lyr.bindTooltip(`<b>${esc(l.nome)}</b><br>${esc(nomeAnt)} ${ant.candidato.ano}: ${int(l.ant)}<br>${esc(nomeNovo)} 2026: ${l.apurado ? int(l.novo) : "aguardando"}${l.ret != null ? `<br>Retenção: ${pct(l.ret, 0)}` : ""}`, {sticky: true, className: "tip-l"});
       lyr.on("click", () => abrirMunicipio(l.mun));
+      registrar(m, `hmun|${l.mun}`, lyr);
     },
   }).addTo(m);
   $("#hEsc").innerHTML = escalaHTML(q, "Retenção (votos 2026 ÷ votos 2022)");

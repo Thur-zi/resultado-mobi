@@ -561,3 +561,36 @@ body.sem-rolagem { overflow: hidden; }
 .cmp-cid-ctrl { flex: 0 1 auto; }
 .cmp-cid-ctrl .busca-global.cid-busca { width: 300px; max-width: 100%; }
 #cmpEscCard, #cmpCidade .card { scroll-margin-top: 130px; }
+
+/* ---------------- Animações (identidade MOBI): entrada ao rolar, barras crescendo, troca de aba ----------------
+   Só escondem algo com html.anima (existe IntersectionObserver e o movimento não está reduzido). */
+@keyframes mobi-sobe { from { opacity: 0; transform: translateY(14px); } }
+@keyframes mobi-cresce { from { transform: scaleX(0); } }
+@keyframes mobi-aparece { from { opacity: 0; } }
+@keyframes mobi-linha { from { transform: scaleX(0); opacity: 0; } }
+html.anima .anim:not(.visto) { opacity: 0; }
+html.anima .anim.visto { animation: mobi-sobe .6s var(--ease) var(--atraso, 0ms) backwards; }
+html.anima .anim:not(.visto) :is(.trilho i, .prog i, .barra i) { transform: scaleX(0); }
+html.anima .visto :is(.trilho i, .prog i, .barra i), html.anima .gaveta :is(.trilho i, .prog i) {
+  transform-origin: left center; animation: mobi-cresce .9s var(--ease) calc(var(--atraso, 0ms) + 120ms) both; }
+.leaflet-overlay-pane { animation: mobi-aparece .7s ease both; }
+.aba[aria-selected="true"]::after { transform-origin: center; animation: mobi-linha .35s var(--ease) both; }
+html.anima .kpi.destaque.visto { animation: mobi-sobe .6s var(--ease) var(--atraso, 0ms) backwards, mobi-brilho 2.4s ease .5s 1; }
+@keyframes mobi-brilho { 40% { box-shadow: var(--shadow-lift), 0 0 0 1px rgba(var(--cli-rgb, 85,184,230), .55), 0 24px 70px -26px rgba(var(--cli-rgb, 85,184,230), .8); } }
+.kpi, .card.vidro { transition: border-color .25s, box-shadow .25s; }
+.kpi:hover { border-color: rgba(var(--brand-rgb), 0.35); }
+
+/* Botão "Ver no mapa" (ícone que abre o texto ao passar o mouse na linha) */
+.ver-mapa { display: inline-flex; align-items: center; gap: 0; height: 22px; margin-left: 8px; padding: 0 5px; vertical-align: middle;
+  border-radius: 999px; border: 1px solid rgba(var(--brand-rgb), 0.35); background: rgba(var(--brand-rgb), 0.08); color: var(--kicker);
+  font: 600 11px/1 var(--font-sans); white-space: nowrap; transition: background .2s, border-color .2s, gap .25s var(--ease); }
+.ver-mapa .t { max-width: 0; overflow: hidden; transition: max-width .3s var(--ease); }
+.ver-mapa:hover, .ver-mapa:focus-visible { background: rgba(var(--brand-rgb), 0.2); border-color: rgba(var(--brand-rgb), 0.7); color: var(--foreground); }
+:is(tr, .barra-l):hover .ver-mapa, .ver-mapa:hover, .ver-mapa:focus-visible { gap: 5px; }
+:is(tr, .barra-l):hover .ver-mapa .t, .ver-mapa:hover .t, .ver-mapa:focus-visible .t { max-width: 90px; }
+.barra-l .v .ver-mapa { margin-left: 6px; }
+[data-lugar] { scroll-margin-top: 130px; }
+tbody tr[data-lugar]:hover td { background: rgba(var(--brand-rgb), 0.08); }
+@media (hover: none) { .ver-mapa .t { max-width: 90px; } .ver-mapa { gap: 5px; } }
+@media print { .anim { opacity: 1 !important; animation: none !important; } .ver-mapa { display: none !important; } }
+@media (prefers-reduced-motion: reduce) { .anim { opacity: 1 !important; transform: none !important; } .trilho i, .prog i, .barra i { transform: none !important; } }
