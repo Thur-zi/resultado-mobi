@@ -232,3 +232,28 @@ ol.rank button:hover{background:rgba(85,184,230,.07)}
 #detCorpo tbody tr[data-abrir]:hover td{background:rgba(85,184,230,.07)}
 @media (max-width:700px){.barra .busca.grande{min-width:0;flex-basis:100%}}
 .abas button[hidden]{display:none}
+
+/* quadro flutuante e posição */
+#pop{position:fixed;z-index:2500;width:min(520px,calc(100vw - 16px));max-height:calc(100vh - 16px);overflow:auto;background:#0f151b;border:1px solid rgba(85,184,230,.45);border-radius:16px;padding:16px;box-shadow:0 24px 60px -16px #000;animation:sobe .2s ease both}
+#pop[hidden]{display:none}
+#pop h3{margin:6px 0 2px;font:800 19px/1.2 var(--display);text-transform:none;letter-spacing:0;color:var(--fg)}
+#pop .fechar{position:absolute;right:10px;top:10px;width:28px;height:28px;border-radius:50%;border:0;background:rgba(255,255,255,.1);color:#fff;font-size:16px;cursor:pointer}
+.pop-pres{display:flex;flex-direction:column;gap:6px;margin:10px 0}
+.pop-pres > div{display:grid;grid-template-columns:36px 1fr;gap:2px 8px;align-items:center;font-size:12px}
+.pop-pres span{color:var(--faint);font-weight:700}.pop-pres small{grid-column:2;color:var(--muted)}
+.pop-tops{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;margin:10px 0 12px}
+.pop-tops h4{margin:6px 0 2px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+.pop-tops ol.top button{padding:4px 2px;font-size:12.5px;gap:6px}
+.pop-tops ol.top button::before{width:12px}
+.pop-tops ol.top small{font-size:11px}
+.pop-tops .mais{width:20px!important;height:20px!important}
+#pop .btn.prim{width:100%;justify-content:center}
+@media (max-width:520px){.pop-tops{grid-template-columns:1fr}}
+.mini-mapa path[data-pop]{cursor:pointer}
+tr[data-pop]{cursor:pointer}
+tr[data-pop]:hover td{background:rgba(85,184,230,.07)}
+.sel-pres{background:rgba(255,255,255,.06);border:1px solid var(--border2);color:var(--muted);border-radius:8px;padding:5px 8px;font:600 13px inherit;margin-left:4px;max-width:260px}
+.sel-pres.on{background:var(--brand);color:#0b1a24;border-color:transparent}
+.mv{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;margin:0 0 10px;padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.04)}
+.mv > span{flex-basis:100%;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+.mv b{font:800 16px var(--display)}.mv small{font:500 11.5px var(--sans,inherit);color:var(--muted)}

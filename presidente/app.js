@@ -84,7 +84,7 @@ function agrupar(nivel) {
     if (!grupos.has(chave)) grupos.set(chave, {chave, nome, nivel, mzs: []});
     grupos.get(chave).mzs.push(k);
   }
-  return CACHE[nivel] = [...grupos.values()].map(g => Object.assign(g, somar(g.mzs), maisVotados(nivel, g.chave)));
+  return CACHE[nivel] = [...grupos.values()].map(g => Object.assign(g, somar(g.mzs), maisVotados(nivel, g.chave), posicoes(nivel, g.chave)));
 }
 const unidade = (nivel, chave) => agrupar(nivel).find(u => u.chave === chave);
 const cidadesDe = u => [...new Set(u.mzs.map(k => k.split("-")[0]))];
@@ -92,6 +92,12 @@ const cidadesDe = u => [...new Set(u.mzs.map(k => k.split("-")[0]))];
 function maisVotados(nivel, chave) {
   const g = E.top?.[nivel === "mg" ? "mg" : `${nivel}:${chave}`] || {}, o = {};
   for (const [k, cg, ano] of [["f26", 6, 26], ["e26", 7, 26], ["f22", 6, 22], ["e22", 7, 22]]) { const x = g[`${cg}-${ano}`]?.[0]; o[k] = x ? [E.B.deputados[x[0]], x[1]] : null; o[k + "n"] = x ? E.B.deputados[x[0]].nome : ""; }
+  return o;
+}
+// posição (1 = mais votado do cargo e ano) de cada deputado escolhido; 99 = abaixo do 20º ou sem voto
+function posicoes(nivel, chave) {
+  const g = E.top?.[nivel === "mg" ? "mg" : `${nivel}:${chave}`] || {}, o = {};
+  E.deps.forEach((s, j) => { const l = g[`${s.d.cargo}-${s.d.ano}`] || [], i = l.findIndex(x => x[0] === s.i); o["rk" + j] = i >= 0 ? i + 1 : 99; });
   return o;
 }
 const celTop = x => x ? `<span class="topcel">${avatar(x[0].foto, x[0].nome, "#2a333d", "av-m")}<span>${esc(x[0].nome)} <small>${esc(x[0].partido)} · ${int(x[1])}</small></span></span>` : "–";
@@ -128,7 +134,7 @@ function destaques() {
     <button class="dest" ${abre(meL)}><span class="dl">Macrorregião onde o Lula mais caiu</span><b>${esc(meL.nome)}</b><span>${pp(meL.dLula)} · onde menos caiu: ${esc(meM.nome)} (${pp(meM.dLula)})</span></button>
     ${maxB ? `<button class="dest" ${abre(maxB)}><span class="dl">Maior avanço do Flávio sobre o Jair <small>(cidades com 50 mil+ eleitores)</small></span><b>${esc(maxB.nome)}</b><span>${pp(maxB.dBol)} · ${pct(maxB.bol22)} → ${pct(maxB.bol26)}</span></button>` : ""}`;
 }
-document.addEventListener("click", e => { const a = e.target.closest("[data-abrir]"); if (a) { const [n, ...c] = a.dataset.abrir.split("|"); abrir(n, c.join("|")); } });
+document.addEventListener("click", e => { if (e.target.closest("[data-pop]")) return; const a = e.target.closest("[data-abrir]"); if (a) { const [n, ...c] = a.dataset.abrir.split("|"); abrir(n, c.join("|")); } });
 
 /* ---------------- quadro de uma unidade */
 function listaCand(v, tot, fotos, n = 12) {
@@ -154,20 +160,33 @@ function quadro(u, alvo) {
 
 /* ---------------- cores e legendas (compartilhadas por todos os mapas) */
 const MODOS = () => [["venc26", "Vencedor 2026"], ["venc22", "Vencedor 2022"], ["virou", "Mudou de lado"], ["dLula", "Δ Lula"], ["dBol", "Δ Bolsonaro"], ["lula26", "Lula 2026"], ["bol26", "Flávio 2026"], ["lula22", "Lula 2022"], ["bol22", "Jair 2022"], ["abst26", "Abstenção 2026"]]
-  .concat(E.deps.map((s, j) => ["dp" + j, `${s.d.nome} ${s.d.ano}`])).concat(E.deps.length > 1 ? [["melhor", "Qual deputado foi melhor"]] : []);
+  .concat(E.deps.flatMap((s, j) => [["rk" + j, `${s.d.nome} ${s.d.ano}: onde foi o mais votado`], ["dp" + j, `${s.d.nome} ${s.d.ano}: %`]])).concat(E.deps.length > 1 ? [["melhor", "Qual deputado foi melhor"]] : []);
 const mistura = (c, t) => { const a = parseInt(c.slice(1), 16), b = 0x11171d; const r = s => Math.round(((b >> s) & 255) * (1 - t) + ((a >> s) & 255) * t); return `rgb(${r(16)},${r(8)},${r(0)})`; };
 const rampa = c => [.18, .36, .56, .78, 1].map(t => mistura(c, t));
 const RAMPAS = {lula: rampa(COR.lula), bolso: rampa(COR.bolso), cinza: rampa("#9aa6b2")};
 const DIV = ["#215c8c", "#4f93cc", "#8a96a3", "#e48a76", "#c4503e"];
 function quebras(vals) { const v = vals.filter(x => x != null && isFinite(x)).sort((a, b) => a - b); return [0.2, 0.4, 0.6, 0.8].map(q => v[Math.floor(q * (v.length - 1))]); }
 const rampaDo = modo => /^dp\d/.test(modo) ? rampa(E.deps[+modo.slice(2)].cor) : /lula/.test(modo) ? RAMPAS.lula : /bol/.test(modo) ? RAMPAS.bolso : RAMPAS.cinza;
-const CATEG = m => ["venc26", "venc22", "virou", "melhor"].includes(m);
+const POS = m => /^rk\d/.test(m) || /^pr(22|26):/.test(m);
+const CATEG = m => ["venc26", "venc22", "virou", "melhor"].includes(m) || POS(m);
+function posDe(u, modo) {
+  if (!u) return null;
+  if (/^rk\d/.test(modo)) return u[modo] ?? null;
+  const m = /^pr(22|26):(.+)$/.exec(modo); if (!m) return null;
+  const v = m[1] === "26" ? u.v26 : u.v22; if (!v || !v[m[2]]) return 99;
+  return 1 + Object.values(v).filter(x => x > v[m[2]]).length;
+}
+const corBasePos = modo => /^rk\d/.test(modo) ? E.deps[+modo.slice(2)].cor : (() => { const n = modo.split(":")[1]; return n === LULA || n === JB || n === FB ? corCand(n) : COR.brand; })();
+const FAIXAS_POS = [[1, "1º · mais votado"], [3, "2º ou 3º"], [10, "4º ao 10º"], [20, "11º ao 20º"], [1e9, "abaixo do 20º"]];
+function corPos(r, base) { if (r == null) return "#1a2129"; return r <= 1 ? base : r <= 3 ? mistura(base, .42) : r <= 10 ? mistura(base, .24) : r <= 20 ? mistura(base, .13) : "#1a2027"; }
+const nomeModo = m => { const x = MODOS().find(y => y[0] === m); if (x) return x[1]; const q = /^pr(22|26):(.+)$/.exec(m); return q ? `${NOME_EXIBE(q[2])} ${q[1] === "26" ? "2026" : "2022"}: onde foi o mais votado` : m; };
 function corValor(u, modo, q) {
   if (!u) return "#1a2129";
   if (modo === "venc26") return corCand(u.venc26);
   if (modo === "venc22") return corCand(u.venc22);
   if (modo === "virou") return u.virou ? "#fab219" : "#2a333d";
   if (modo === "melhor") return u.melhor >= 0 ? E.deps[u.melhor].cor : "#1a2129";
+  if (POS(modo)) return corPos(posDe(u, modo), corBasePos(modo));
   const x = u[modo]; if (x == null || !isFinite(x)) return "#1a2129";
   if (modo === "dLula" || modo === "dBol") { const i = q.filter(t => x > t).length; return modo === "dLula" ? DIV[i] : DIV[4 - i]; }
   return rampaDo(modo)[q.filter(t => x > t).length];
@@ -176,6 +195,7 @@ const fmtModo = (modo, x) => modo === "dLula" || modo === "dBol" ? pp(x) : pct(x
 function legenda(modo, q) {
   if (modo === "venc26" || modo === "venc22") return `<span><b style="background:${COR.lula}"></b>Lula</span><span><b style="background:${COR.bolso}"></b>${modo === "venc22" ? "Jair Bolsonaro" : "Flávio Bolsonaro"}</span><span><b style="background:${COR.outro}"></b>outro</span>`;
   if (modo === "virou") return `<span><b style="background:#fab219"></b>mudou de lado</span><span><b style="background:#2a333d"></b>manteve</span>`;
+  if (POS(modo)) { const b = corBasePos(modo); return FAIXAS_POS.map(([r, t], i) => `<span><b style="background:${corPos(i === 4 ? 99 : r, b)}"></b>${t}</span>`).join("") + `<span class="nota">(posição entre os candidatos do mesmo cargo e ano)</span>`; }
   if (modo === "melhor") return E.deps.map(s => `<span><b style="background:${s.cor}"></b>${esc(s.d.nome)} ${s.d.ano}</span>`).join("") + `<span class="nota">(maior % dos válidos do próprio cargo)</span>`;
   const c = modo === "dLula" ? DIV : modo === "dBol" ? DIV.slice().reverse() : rampaDo(modo), f = x => fmtModo(modo, x);
   return c.map((cor, i) => `<span><b style="background:${cor}"></b>${i === 0 ? "até " + f(q[0]) : i === 4 ? "acima de " + f(q[3]) : f(q[i - 1]) + " a " + f(q[i])}</span>`).join("") + `<span class="nota">(5 faixas com o mesmo número de lugares)</span>`;
@@ -184,10 +204,19 @@ function dica(u) {
   return `<b>${esc(u.nome)}</b><br>2022: Lula ${pct(u.lula22)} · Jair ${pct(u.bol22)}<br>2026: Lula ${pct(u.lula26)} · Flávio ${pct(u.bol26)}<br>Δ Lula ${pp(u.dLula)} · Δ Bolsonaro ${pp(u.dBol)}${u.virou ? " · <b style='color:#fab219'>mudou de lado</b>" : ""}`
     + (u.f26 ? `<br>Mais votados 2026: <b>${esc(u.f26[0].nome)}</b> (fed.) · <b>${esc(u.e26?.[0].nome)}</b> (est.)` : "")
     + (u.f22 ? `<br>Mais votados 2022: ${esc(u.f22[0].nome)} (fed.) · ${esc(u.e22?.[0].nome)} (est.)` : "")
-    + E.deps.map((s, j) => `<br><i style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${s.cor}"></i> ${esc(s.d.nome)} ${s.d.ano}: ${int(u["dv" + j])} votos (${pct(u["dp" + j], 2)})`).join("");
+    + E.deps.map((s, j) => `<br><i style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${s.cor}"></i> ${esc(s.d.nome)} ${s.d.ano}: ${int(u["dv" + j])} votos (${pct(u["dp" + j], 2)})${u["rk" + j] ? ` · <b>${u["rk" + j] === 1 ? "1º, mais votado" : u["rk" + j] < 99 ? u["rk" + j] + "º" : "abaixo do 20º"}</b>` : ""}`).join("");
 }
-const botoesModo = (sel, atual) => { $(sel).innerHTML = MODOS().map(([k, n]) => { const j = /^dp(\d)/.exec(k); return `<button data-m="${k}" aria-pressed="${atual === k}">${j ? `<i class="pt" style="background:${E.deps[+j[1]].cor}"></i>` : ""}${esc(n)}</button>`; }).join(""); };
-const validaModo = m => MODOS().some(x => x[0] === m) ? m : "venc26";
+const botoesModo = (sel, atual) => {
+  const pres = [["26", E.B.cand26], ["22", E.B.cand22["1"]]].flatMap(([a, l]) => l.map(c => [`pr${a}:${c[0]}`, `${NOME_EXIBE(c[0])} · 20${a}`]));
+  $(sel).innerHTML = MODOS().map(([k, n]) => { const j = /^(dp|rk)(\d)/.exec(k); return `<button data-m="${k}" aria-pressed="${atual === k}">${j ? `<i class="pt" style="background:${E.deps[+j[2]].cor}"></i>` : ""}${esc(n)}</button>`; }).join("")
+    + `<select class="sel-pres${/^pr/.test(atual) ? " on" : ""}" aria-label="Candidato a Presidente: onde foi o mais votado"><option value="">Presidente: onde foi o mais votado…</option>${pres.map(([k, n]) => `<option value="${esc(k)}" ${k === atual ? "selected" : ""}>${esc(n)}</option>`).join("")}</select>`;
+};
+const validaModo = m => MODOS().some(x => x[0] === m) || /^pr(22|26):/.test(m) ? m : "venc26";
+document.addEventListener("change", e => {
+  const s = e.target.closest(".sel-pres"); if (!s || !s.value) return;
+  const id = s.parentElement.id;
+  if (id === "modoMapa") { E.modo = s.value; desenharMapa(); } else if (id === "galModo") { E.galModo = s.value; galeria(); } else if (id === "detModo") { E.detModo = s.value; desenharDetMapa(); }
+});
 
 /* ---------------- mapinhas em SVG (galeria de regiões) */
 function prepararGeo() {
@@ -210,12 +239,12 @@ function miniSvg(itens, cls = "mini-mapa") {
   let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
   for (const it of itens) { const b = E.bb.get(it.ibge); if (!b) continue; x0 = Math.min(x0, b[0]); y0 = Math.min(y0, b[1]); x1 = Math.max(x1, b[2]); y1 = Math.max(y1, b[3]); }
   const pad = Math.max(x1 - x0, y1 - y0) * .05;
-  return `<svg class="${cls}" viewBox="${(x0 - pad).toFixed(1)} ${(y0 - pad).toFixed(1)} ${(x1 - x0 + 2 * pad).toFixed(1)} ${(y1 - y0 + 2 * pad).toFixed(1)}" preserveAspectRatio="xMidYMid meet" role="img">${itens.map(it => `<path d="${E.pth.get(it.ibge) || ""}" fill="${it.cor}"><title>${esc(it.titulo)}</title></path>`).join("")}</svg>`;
+  return `<svg class="${cls}" viewBox="${(x0 - pad).toFixed(1)} ${(y0 - pad).toFixed(1)} ${(x1 - x0 + 2 * pad).toFixed(1)} ${(y1 - y0 + 2 * pad).toFixed(1)}" preserveAspectRatio="xMidYMid meet" role="img">${itens.map(it => `<path d="${E.pth.get(it.ibge) || ""}" fill="${it.cor}"${it.pop ? ` data-pop="${esc(it.pop)}"` : ""}><title>${esc(it.titulo)}</title></path>`).join("")}</svg>`;
 }
 const localizador = ibges => `<svg class="loc" viewBox="${E.vbMG}" aria-hidden="true"><use href="#mgTodo" fill="#2a333d"/><path d="${ibges.map(i => E.pth.get(i) || "").join("")}" fill="${COR.brand}"/></svg>`;
 function cartaoRegiao(u, modo, q, cidMap) {
   const muns = cidadesDe(u);
-  const itens = muns.map(m => { const c = cidMap.get(m); return {ibge: ibgeDe(m), cor: corValor(c, modo, q), titulo: c ? `${c.nome}: Lula ${pct(c.lula26)} · Flávio ${pct(c.bol26)}` : ""}; });
+  const itens = muns.map(m => { const c = cidMap.get(m); return {ibge: ibgeDe(m), pop: `mun|${m}`, cor: corValor(c, modo, q), titulo: c ? `${c.nome}: Lula ${pct(c.lula26)} · Flávio ${pct(c.bol26)}` : ""}; });
   const viraram = muns.filter(m => cidMap.get(m)?.virou).length, nLula = muns.filter(m => familia(cidMap.get(m)?.venc26) === "lula").length;
   const barra = (a, b, ca, cb) => `<div class="duo"><i style="width:${a * 100}%;background:${ca}"></i><i style="width:${b * 100}%;background:${cb}"></i></div>`;
   return `<button class="card regiao" data-abrir="${u.nivel}|${esc(u.chave)}">
@@ -226,14 +255,14 @@ function cartaoRegiao(u, modo, q, cidMap) {
     <div class="rg-linha"><span>2022</span>${barra(u.lula22, u.bol22, COR.lula, COR.bolso)}<small>Lula ${pct(u.lula22)} · Jair ${pct(u.bol22)}</small></div>
     <div class="rg-chips"><span class="${u.dLula > 0 ? "pos" : "neg"}">Lula ${pp(u.dLula)}</span><span class="${u.dBol > 0 ? "pos" : "neg"}">Bolsonaro ${pp(u.dBol)}</span><span>${int(nLula)} de ${int(muns.length)} com Lula</span>${viraram ? `<span class="am">${int(viraram)} viraram</span>` : ""}</div>
     ${u.f26 ? `<div class="rg-top"><span>Mais votados 2026</span>${celTop(u.f26)}${celTop(u.e26)}</div>` : ""}
-    ${E.deps.length ? `<div class="rg-deps">${E.deps.map((s, j) => `<span><i style="background:${s.cor}"></i>${esc(s.d.nome)} ${s.d.ano}: <b>${pct(u["dp" + j], 2)}</b></span>`).join("")}</div>` : ""}
+    ${E.deps.length ? `<div class="rg-deps">${E.deps.map((s, j) => { const nm = muns.filter(m => cidMap.get(m)?.["rk" + j] === 1).length; return `<span><i style="background:${s.cor}"></i>${esc(s.d.nome)} ${s.d.ano}: <b>${pct(u["dp" + j], 2)}</b> · ${u["rk" + j] === 1 ? "<b>1º aqui</b>" : u["rk" + j] < 99 ? u["rk" + j] + "º aqui" : "abaixo do 20º"} · mais votado em ${int(nm)} ${nm === 1 ? "cidade" : "cidades"}</span>`; }).join("")}</div>` : ""}
   </button>`;
 }
 function galeria() {
   E.galModo = validaModo(E.galModo); botoesModo("#galModo", E.galModo);
   const cid = agrupar("mun"), cidMap = new Map(cid.map(c => [c.chave, c])), q = quebras(cid.map(c => c[E.galModo]));
   const o = E.galOrdem, lista = agrupar(E.galNivel).slice().sort((a, b) => o === "nome" ? a.nome.localeCompare(b.nome) : o === "dLula" ? a.dLula - b.dLula : (b[o] - a[o]));
-  $("#galLegenda").innerHTML = `<span class="nota">Cidades pintadas por <strong>${esc(MODOS().find(m => m[0] === E.galModo)[1])}</strong>:</span>` + legenda(E.galModo, q);
+  $("#galLegenda").innerHTML = `<span class="nota">Cidades pintadas por <strong>${esc(nomeModo(E.galModo))}</strong>:</span>` + legenda(E.galModo, q);
   // desenha em lotes para a página não travar (zonas e regiões imediatas têm muitos cartões)
   const alvo = $("#galeria"), vez = (E.galVez = (E.galVez || 0) + 1);
   alvo.innerHTML = "";
@@ -311,7 +340,7 @@ function desenharMapa() {
   const q = quebras(lista.map(u => u[E.modo]));
   const grupo = L.featureGroup(), regiao = REGIAO(E.nivel);
   L.geoJSON(E.geo, {style: f => ({color: regiao ? "rgba(11,16,21,.35)" : "#0b1015", weight: regiao ? .2 : .4, fillOpacity: E.nivel === "zona" ? .25 : .9, fillColor: corValor(porIbge.get(f.properties.ibge), E.modo, q)}),
-    onEachFeature: (f, l) => { const u = porIbge.get(f.properties.ibge); if (!u) return; l.bindTooltip(dica(u), {sticky: true}); l.on("click", () => abrir(u.nivel, u.chave)); }}).addTo(grupo);
+    onEachFeature: (f, l) => { const u = porIbge.get(f.properties.ibge); if (!u) return; l.bindTooltip(dica(u), {sticky: true}); l.on("click", ev => popover(u.nivel, u.chave, ev)); }}).addTo(grupo);
   let listaRank = lista;
   if (E.nivel === "zona") {
     listaRank = E.unidades;
@@ -319,7 +348,7 @@ function desenharMapa() {
     for (const u of E.unidades) {
       const z = E.B.zonas[u.chave]; if (!z?.lat) continue;
       L.circleMarker([z.lat, z.lng], {radius: 4 + 14 * Math.sqrt(u.aptos / mx), color: "#0b1015", weight: 1, fillOpacity: .9, fillColor: corValor(u, E.modo, qz)})
-        .bindTooltip(dica(u), {sticky: true}).on("click", () => abrir("zona", u.chave)).addTo(grupo);
+        .bindTooltip(dica(u), {sticky: true}).on("click", ev => popover("zona", u.chave, ev)).addTo(grupo);
     }
   }
   E.camada = grupo.addTo(E.mapa);
@@ -329,8 +358,15 @@ function desenharMapa() {
   ranking(listaRank);
 }
 function ranking(lista) {
-  const m = E.modo, nome = MODOS().find(x => x[0] === m)[1], item = (u, v) => `<li><button data-abrir="${u.nivel}|${esc(u.chave)}"><span>${esc(u.nome)}</span><b>${v}</b></button></li>`;
+  const m = E.modo, nome = nomeModo(m), item = (u, v) => `<li><button data-abrir="${u.nivel}|${esc(u.chave)}"><span>${esc(u.nome)}</span><b>${v}</b></button></li>`;
   let html;
+  if (POS(m)) {
+    const b = corBasePos(m), l = lista.map(u => [u, posDe(u, m)]), tot = lista.reduce((t, u) => t + u.aptos, 0);
+    const prim = l.filter(x => x[1] === 1).sort((a, c) => c[0].aptos - a[0].aptos);
+    html = `<h3 class="h3c">${esc(nomeModo(m))}</h3><div class="cont">${FAIXAS_POS.map(([r, t], i) => { const lo = i ? FAIXAS_POS[i - 1][0] : 0, g = l.filter(x => x[1] != null && x[1] > lo && x[1] <= (i === 4 ? 1e9 : r)); return `<div class="cont-l"><i style="background:${corPos(i === 4 ? 99 : r, b)}"></i><b>${t}</b><span>${int(g.length)} lugares · ${pct(g.reduce((a, x) => a + x[0].aptos, 0) / tot)} dos eleitores</span></div>`; }).join("")}</div>
+      <h4 class="sub">Onde foi o mais votado <small>${int(prim.length)}</small></h4><ol class="rank">${prim.slice(0, 40).map(([u]) => item(u, int(u.aptos) + " el.")).join("") || "<li class='nota'>Em nenhum lugar deste recorte.</li>"}</ol>`;
+    $("#ranking").innerHTML = html; return;
+  }
   if (CATEG(m)) {
     const grupos = new Map();
     for (const u of lista) { const k = m === "venc26" ? NOME_EXIBE(u.venc26) : m === "venc22" ? NOME_EXIBE(u.venc22) : m === "virou" ? (u.virou ? "Mudou de lado" : "Manteve") : (u.melhor >= 0 ? `${E.deps[u.melhor].d.nome} ${E.deps[u.melhor].d.ano}` : "–"); const g = grupos.get(k) || {n: 0, el: 0, cor: corValor(u, m, [])}; g.n++; g.el += u.aptos; grupos.set(k, g); }
@@ -345,6 +381,44 @@ function ranking(lista) {
   $("#ranking").innerHTML = html;
 }
 $("#modoMapa").addEventListener("click", e => { const b = e.target.closest("[data-m]"); if (b) { E.modo = b.dataset.m; desenharMapa(); } });
+
+/* ---------------- quadro flutuante ao clicar num lugar dos mapas */
+function popover(nivel, chave, ev) {
+  const u = unidade(nivel, chave); if (!u) return;
+  const oe = ev?.originalEvent || ev, x = oe?.clientX ?? innerWidth / 2, y = oe?.clientY ?? innerHeight / 2;
+  const g = E.top[nivel === "mg" ? "mg" : `${nivel}:${chave}`] || {};
+  const lista = (k, n = 3) => (g[k] || []).slice(0, n).map(([i, q]) => { const d = E.B.deputados[i], sel = E.deps.some(s => s.d.id === d.id);
+    return `<li><button data-dep="${i}" class="${sel ? "sel" : ""}" title="Adicionar ao comparativo">${avatar(d.foto, d.nome, "#2a333d", "av-m")}<span>${esc(d.nome)} <small>${esc(d.partido)}</small></span><b>${int(q)}</b><i class="mais">${sel ? "✓" : "+"}</i></button></li>`; }).join("") || "<li class='nota'>–</li>";
+  const pop = $("#pop");
+  pop.innerHTML = `<button class="fechar" aria-label="Fechar">×</button>
+    <span class="selo mini">${NIVEL1[nivel]}</span><h3>${esc(u.nome)}</h3>
+    <p class="nota">${int(u.aptos)} eleitores${u.virou ? ' · <b style="color:#fab219">mudou de lado</b>' : ""}</p>
+    <div class="pop-pres">
+      <div><span>2022</span><div class="duo"><i style="width:${u.lula22 * 100}%;background:${COR.lula}"></i><i style="width:${u.bol22 * 100}%;background:${COR.bolso}"></i></div><small>Lula ${pct(u.lula22)} · Jair ${pct(u.bol22)}</small></div>
+      <div><span>2026</span><div class="duo"><i style="width:${u.lula26 * 100}%;background:${COR.lula}"></i><i style="width:${u.bol26 * 100}%;background:${COR.bolso}"></i></div><small>Lula ${pct(u.lula26)} · Flávio ${pct(u.bol26)}</small></div>
+    </div>
+    <div class="rg-chips"><span class="${u.dLula > 0 ? "pos" : "neg"}">Lula ${pp(u.dLula)}</span><span class="${u.dBol > 0 ? "pos" : "neg"}">Bolsonaro ${pp(u.dBol)}</span><span>Abstenção ${pct(u.abst26)}</span></div>
+    ${E.deps.length ? `<div class="rg-deps">${E.deps.map((s, j) => `<span><i style="background:${s.cor}"></i>${esc(s.d.nome)} ${s.d.ano}: <b>${int(u["dv" + j])}</b> votos (${pct(u["dp" + j], 2)}) · ${u["rk" + j] === 1 ? "<b>1º, o mais votado</b>" : u["rk" + j] < 99 ? `<b>${u["rk" + j]}º</b>` : "abaixo do 20º"}</span>`).join("")}</div>` : ""}
+    <div class="pop-tops">
+      <div><h4>Federal 2026</h4><ol class="top">${lista("6-26")}</ol></div><div><h4>Estadual 2026</h4><ol class="top">${lista("7-26")}</ol></div>
+      <div><h4>Federal 2022</h4><ol class="top">${lista("6-22")}</ol></div><div><h4>Estadual 2022</h4><ol class="top">${lista("7-22")}</ol></div>
+    </div>
+    <button class="btn prim" data-abrir="${nivel}|${esc(chave)}">Ver tudo sobre ${esc(u.nome)} →</button>`;
+  pop.hidden = false;
+  const w = pop.offsetWidth, h = pop.offsetHeight;
+  pop.style.left = Math.max(8, Math.min(innerWidth - w - 8, x + 14)) + "px";
+  pop.style.top = Math.max(8, Math.min(innerHeight - h - 8, y - 20)) + "px";
+  E.popT = Date.now();
+}
+const fecharPop = () => { $("#pop").hidden = true; };
+document.addEventListener("click", e => {
+  const p = e.target.closest("[data-pop]");
+  if (p) { const [n, ...c] = p.dataset.pop.split("|"); popover(n, c.join("|"), e); return; }
+  if (e.target.closest("#pop .fechar")) return fecharPop();
+  if (!e.target.closest("#pop") && Date.now() - (E.popT || 0) > 80) fecharPop();
+  if (e.target.closest("#pop [data-abrir]")) fecharPop();
+}, true);
+document.addEventListener("keydown", e => { if (e.key === "Escape") fecharPop(); });
 
 /* ---------------- lugar escolhido: mapa ampliado, comparativo, mais votados */
 function tabelaSub(titulo, rot, lista, nivelSub) {
@@ -405,11 +479,11 @@ function desenharDetMapa() {
   const lista = [...porM.values()], q = quebras(agrupar("mun").map(c => c[E.detModo]));
   const grupo = L.featureGroup(), foco = L.featureGroup();
   L.geoJSON(E.geo, {style: f => { const c = porIbge.get(f.properties.ibge); return c ? {color: "#0b1015", weight: .8, fillOpacity: .92, fillColor: corValor(c, E.detModo, q)} : {color: "rgba(255,255,255,.08)", weight: .3, fillOpacity: .05, fillColor: "#9aa6b2"}; },
-    onEachFeature: (f, l) => { const c = porIbge.get(f.properties.ibge); if (!c) return; l.addTo(foco); l.bindTooltip(dica(c), {sticky: true}); if (nivel !== "mun") l.on("click", () => abrir("mun", [...porM].find(([m]) => ibgeDe(m) === f.properties.ibge)[0])); }}).addTo(grupo);
+    onEachFeature: (f, l) => { const c = porIbge.get(f.properties.ibge); if (!c) return; l.addTo(foco); l.bindTooltip(dica(c), {sticky: true}); l.on("click", ev => popover("mun", [...porM].find(([m]) => ibgeDe(m) === f.properties.ibge)[0], ev)); }}).addTo(grupo);
   // cidade com várias zonas: um círculo por zona
   if (nivel === "mun" && u.mzs.length > 1) {
     const zs = u.mzs.map(k => Object.assign(somar([k]), {nome: `Zona ${k.split("-")[1]}`, z: k.split("-")[1]})), mx = Math.max(...zs.map(z => z.aptos)), qz = quebras(zs.map(z => z[E.detModo]));
-    for (const z of zs) { const p = B.zonas[z.z]; if (!p?.lat) continue; L.circleMarker([p.lat, p.lng], {radius: 7 + 16 * Math.sqrt(z.aptos / mx), color: "#0b1015", weight: 1.2, fillOpacity: .95, fillColor: corValor(z, E.detModo, CATEG(E.detModo) ? q : qz)}).bindTooltip(dica(z), {sticky: true}).on("click", () => abrir("zona", z.z)).addTo(grupo); }
+    for (const z of zs) { const p = B.zonas[z.z]; if (!p?.lat) continue; L.circleMarker([p.lat, p.lng], {radius: 7 + 16 * Math.sqrt(z.aptos / mx), color: "#0b1015", weight: 1.2, fillOpacity: .95, fillColor: corValor(z, E.detModo, CATEG(E.detModo) ? q : qz)}).bindTooltip(dica(z), {sticky: true}).on("click", ev => popover("zona", z.z, ev)).addTo(grupo); }
   }
   E.detCamada = grupo.addTo(E.detMapa);
   const lim = foco.getBounds();
@@ -449,9 +523,9 @@ async function escolherDep(d, irPara = true, silencioso = false) {
   if (E.deps.some(s => s.d.id === d.id)) return;
   if (E.deps.length >= 4) { toast("Já há 4 deputados no comparativo. Remova um para adicionar outro."); return; }
   const votos = await fetch(`dados/dep/${d.id}.json`).then(r => r.json());
-  E.deps.push({d, votos, total: Object.values(votos).reduce((t, x) => t + x, 0), cor: CORES_DEP[E.deps.length]});
+  E.deps.push({d, i: E.B.deputados.indexOf(d), votos, total: Object.values(votos).reduce((t, x) => t + x, 0), cor: CORES_DEP[E.deps.length]});
   if (silencioso) return;
-  E.modo = E.galModo = E.detModo = "dp" + (E.deps.length - 1);
+  E.modo = E.galModo = E.detModo = "rk" + (E.deps.length - 1);
   atualizarDeps();
   if (irPara) irAba("deps");
   else toast(`<b>${esc(d.nome)}</b> (${d.ano}) entrou no comparativo · <a href="#deps" data-ir="deps">ver deputados</a>`);
@@ -476,6 +550,7 @@ function secaoDeputados() {
     return `<div class="card dep-card" style="--cor:${s.cor}">
       <div class="dep-top">${avatar(d.foto, d.nome, s.cor, "av-g")}<div><h3>${esc(d.nome)}</h3><p>${logo(d.partido)}${esc(d.partido)} · ${cargoNome(d.cargo)} 20${d.ano}</p><span class="sit ${d.eleito ? "ok" : ""}">${esc(d.situacao || (d.eleito ? "Eleito(a)" : "Não eleito(a)"))}</span></div></div>
       <div class="dep-num"><div><b>${int(d.votos)}</b><span>votos em MG</span></div><div><b>${dec(rL)}</b><span>× Lula ${d.ano === 26 ? "2026" : "2022 (" + t22 + ")"}</span></div><div><b>${dec(rB)}</b><span>× ${nb} Bolsonaro</span></div></div>
+      <div class="mv"><span>Mais votado em</span>${[["mun", "cidades"], ["zona", "zonas"], ["mi", "microrregiões"], ["me", "macrorregiões"], ["rm", "reg. imediatas"], ["ri", "reg. intermediárias"]].map(([k, n]) => { const l = agrupar(k); return `<b>${int(l.filter(u => u["rk" + j] === 1).length)}<small> de ${int(l.length)} ${n}</small></b>`; }).join("")}</div>
       <p class="leitura">O voto de <b>${esc(d.nome)}</b> ${lado} <span class="nota">(${leituraR(rL)} com o % do Lula nas cidades)</span>. Mais votos em: ${esc(topC)}. Macrorregião mais forte: <b>${esc(me.nome)}</b> (${pct(me["dp" + j], 2)}).</p></div>`;
   }).join("");
   let pares = "";
@@ -491,8 +566,8 @@ function secaoDeputados() {
   }
   // um mapinha de Minas por deputado
   const cidMap = new Map(agrupar("mun").map(c => [c.chave, c]));
-  const mapas = `<div class="dep-mapas">${E.deps.map((s, j) => { const q = quebras([...cidMap.values()].map(c => c["dp" + j])); return `<div class="card"><h3 class="h3c"><i class="pt" style="background:${s.cor}"></i>${esc(s.d.nome)} ${s.d.ano} em Minas</h3>${miniSvg([...cidMap.values()].map(c => ({ibge: ibgeDe(c.chave), cor: corValor(c, "dp" + j, q), titulo: `${c.nome}: ${int(c["dv" + j])} votos (${pct(c["dp" + j], 2)})`})), "mini-mapa grande")}<div class="legenda">${legenda("dp" + j, q)}</div></div>`; }).join("")}
-    ${E.deps.length > 1 ? `<div class="card"><h3 class="h3c">Qual foi melhor em cada cidade</h3>${miniSvg([...cidMap.values()].map(c => ({ibge: ibgeDe(c.chave), cor: corValor(c, "melhor", []), titulo: c.nome})), "mini-mapa grande")}<div class="legenda">${legenda("melhor", [])}</div></div>` : ""}</div>`;
+  const mapas = `<div class="dep-mapas">${E.deps.map((s, j) => { const q = quebras([...cidMap.values()].map(c => c["dp" + j])); return `<div class="card"><h3 class="h3c"><i class="pt" style="background:${s.cor}"></i>${esc(s.d.nome)} ${s.d.ano} em Minas</h3>${miniSvg([...cidMap.values()].map(c => ({ibge: ibgeDe(c.chave), pop: `mun|${c.chave}`, cor: corValor(c, "dp" + j, q), titulo: `${c.nome}: ${int(c["dv" + j])} votos (${pct(c["dp" + j], 2)})`})), "mini-mapa grande")}<div class="legenda">${legenda("dp" + j, q)}</div></div>`; }).join("")}
+    ${E.deps.length > 1 ? `<div class="card"><h3 class="h3c">Qual foi melhor em cada cidade</h3>${miniSvg([...cidMap.values()].map(c => ({ibge: ibgeDe(c.chave), pop: `mun|${c.chave}`, cor: corValor(c, "melhor", []), titulo: c.nome})), "mini-mapa grande")}<div class="legenda">${legenda("melhor", [])}</div></div>` : ""}</div>`;
   const topC = cid.slice().sort((a, b) => E.deps.reduce((t, s, j) => t + (b["dv" + j] || 0), 0) - E.deps.reduce((t, s, j) => t + (a["dv" + j] || 0), 0)).slice(0, 40);
   const tab = `<div class="card" style="margin-top:14px"><h3 class="h3c">Cidades onde os escolhidos tiveram mais votos <small class="nota">40 maiores · clique para abrir a cidade</small></h3><div class="tab-wrap" style="max-height:460px"><table><thead><tr><th>Cidade</th>${E.deps.map(s => `<th style="box-shadow:inset 0 -3px 0 ${s.cor}">${esc(s.d.nome)} ${s.d.ano}</th><th>%</th>`).join("")}${E.deps.length > 1 ? "<th>Melhor</th>" : ""}<th>Lula 22</th><th>Lula 26</th><th>Jair 22</th><th>Flávio 26</th><th>Vencedor 26</th></tr></thead>
     <tbody>${topC.map(c => `<tr data-abrir="mun|${esc(c.chave)}"><td><b>${esc(c.nome)}</b></td>${E.deps.map((s, j) => `<td>${int(c["dv" + j])}</td><td>${pct(c["dp" + j], 2)}</td>`).join("")}${E.deps.length > 1 ? `<td>${c.melhor >= 0 ? `<span class="venc"><i style="background:${E.deps[c.melhor].cor}"></i>${esc(E.deps[c.melhor].d.nome)}</span>` : "–"}</td>` : ""}<td>${pct(c.lula22)}</td><td>${pct(c.lula26)}</td><td>${pct(c.bol22)}</td><td>${pct(c.bol26)}</td><td>${esc(NOME_EXIBE(c.venc26))}</td></tr>`).join("")}</tbody></table></div></div>`;
@@ -500,7 +575,8 @@ function secaoDeputados() {
     <div class="grid2" style="margin-top:14px">
       <div class="card"><h3 class="h3c">Do menos ao mais lulista</h3><canvas id="gQuint" height="270"></canvas><p class="nota">Cidades divididas em 5 grupos com o mesmo número de eleitores, pelo % do Lula em 2026. Barra = % dos válidos de cada deputado no grupo.</p></div>
       <div class="card"><h3 class="h3c" id="gDispT"></h3><canvas id="gDisp" height="270"></canvas><p class="nota">Cada bolinha é uma cidade; o tamanho é o número de eleitores.</p></div>
-    </div>${tab}`;
+    </div>${tab}<div id="depReg"></div>`;
+  depRegioes();
   const ordC = cid.slice().sort((a, b) => a.lula26 - b.lula26), totE = ordC.reduce((t, c) => t + c.aptos, 0);
   const quint = [0, 1, 2, 3, 4].map(() => ({lula: 0, t: 0, dv: E.deps.map(() => 0), val: E.deps.map(() => 0)}));
   const vals = E.deps.map(s => validos(s.d));
@@ -527,6 +603,33 @@ function secaoDeputados() {
         scales: {x: {title: {display: true, text: `% de ${A.d.nome} ${A.d.ano}`, color: A.cor}, grid}, y: {title: {display: true, text: `% de ${Bd.d.nome} ${Bd.d.ano}`, color: Bd.cor}, grid}}}}));
   }
 }
+
+/* ---------------- deputados por região: tabela, contagem e mapas em todos os recortes */
+const NIV_DEP = [["me", "Macrorregiões"], ["mi", "Microrregiões"], ["ri", "Regiões intermediárias"], ["rm", "Regiões imediatas"], ["zona", "Zonas eleitorais"], ["mun", "Cidades"]];
+function depRegioes() {
+  const alvo = $("#depReg"); if (!alvo || !E.deps.length) return;
+  const nv = E.depNivel || "me", lista = agrupar(nv), soma = u => E.deps.reduce((t, s, j) => t + (u["dv" + j] || 0), 0);
+  const cid = agrupar("mun"), cidMap = new Map(cid.map(c => [c.chave, c]));
+  const modo = (E.depPint || "rk") === "rk" ? "rk0" : E.deps.length > 1 ? "melhor" : "dp0", q = quebras(cid.map(c => c[modo]));
+  // em quantos lugares de cada recorte cada deputado foi o melhor
+  const cont = E.deps.length > 1 ? `<div class="card" style="margin-bottom:14px"><h3 class="h3c">Onde cada um foi melhor <small class="nota">número de lugares em que teve o maior % dos válidos</small></h3><div class="tab-wrap"><table><thead><tr><th>Recorte</th>${E.deps.map(s => `<th style="box-shadow:inset 0 -3px 0 ${s.cor}">${esc(s.d.nome)} ${s.d.ano}</th>`).join("")}</tr></thead><tbody>${NIV_DEP.map(([k, n]) => { const l = agrupar(k); return `<tr><td><b>${n}</b> <small class="nota">${l.length}</small></td>${E.deps.map((s, j) => { const v = l.filter(u => u.melhor === j).length; return `<td><b>${int(v)}</b> <small class="nota">${pct(v / l.length, 0)}</small></td>`; }).join("")}</tr>`; }).join("")}</tbody></table></div></div>` : "";
+  const tabela = `<div class="card"><h3 class="h3c">${esc(NIVEIS[nv])}: votos de cada escolhido <small class="nota">${int(lista.length)} lugares · clique para ver detalhes</small></h3><div class="tab-wrap" style="max-height:520px"><table><thead><tr><th>Lugar</th><th>Eleitores</th>${E.deps.map(s => `<th style="box-shadow:inset 0 -3px 0 ${s.cor}">${esc(s.d.nome)} ${s.d.ano}</th><th>%</th>`).join("")}${E.deps.length > 1 ? "<th>Melhor</th>" : ""}<th>Lula 26</th><th>Flávio 26</th><th>Vencedor 26</th><th>Federal + votado 26</th><th>Estadual + votado 26</th></tr></thead>
+    <tbody>${lista.slice().sort((a, b) => soma(b) - soma(a)).map(u => `<tr data-pop="${nv}|${esc(u.chave)}"><td><b>${esc(u.nome)}</b></td><td>${int(u.aptos)}</td>${E.deps.map((s, j) => `<td>${int(u["dv" + j])}</td><td>${pct(u["dp" + j], 2)}</td>`).join("")}${E.deps.length > 1 ? `<td>${u.melhor >= 0 ? `<span class="venc"><i style="background:${E.deps[u.melhor].cor}"></i>${esc(E.deps[u.melhor].d.nome)}</span>` : "–"}</td>` : ""}<td>${pct(u.lula26)}</td><td>${pct(u.bol26)}</td><td>${esc(NOME_EXIBE(u.venc26))}</td><td>${celTop(u.f26)}</td><td>${celTop(u.e26)}</td></tr>`).join("")}</tbody></table></div></div>`;
+  // mapas de Minas de cada deputado pintados pelo recorte (cada região com uma cor só)
+  const porMun = new Map(); if (nv !== "zona" && nv !== "mun") for (const u of lista) for (const k of u.mzs) porMun.set(k.split("-")[0], u);
+  const unidadeDaCidade = m => nv === "mun" || nv === "zona" ? cidMap.get(m) : porMun.get(m);
+  const pintM = E.depPint || "rk";
+  const mapasMG = `<div class="dep-mapas">${E.deps.map((s, j) => { const mk = pintM + j, qq = quebras((nv === "zona" ? cid : lista).map(u => u["dp" + j])); return `<div class="card"><h3 class="h3c"><i class="pt" style="background:${s.cor}"></i>${esc(s.d.nome)} ${s.d.ano} · ${esc(NIVEIS[nv === "zona" ? "mun" : nv])}${pintM === "rk" ? " · onde foi o mais votado" : ""}</h3>${miniSvg(cid.map(c => { const u = unidadeDaCidade(c.chave); return {ibge: ibgeDe(c.chave), pop: `mun|${c.chave}`, cor: corValor(u, mk, qq), titulo: `${u?.nome}: ${pct(u?.["dp" + j], 2)} · ${u?.["rk" + j] === 1 ? "mais votado" : u?.["rk" + j] < 99 ? u?.["rk" + j] + "º" : "abaixo do 20º"}`}; }), "mini-mapa grande")}<div class="legenda">${legenda(mk, qq)}</div></div>`; }).join("")}
+    ${E.deps.length > 1 ? `<div class="card"><h3 class="h3c">Qual foi melhor · ${esc(NIVEIS[nv === "zona" ? "mun" : nv])}</h3>${miniSvg(cid.map(c => { const u = unidadeDaCidade(c.chave); return {ibge: ibgeDe(c.chave), pop: `mun|${c.chave}`, cor: corValor(u, "melhor", []), titulo: u?.nome || ""}; }), "mini-mapa grande")}<div class="legenda">${legenda("melhor", [])}</div></div>` : ""}</div>`;
+  const galeriaDep = REGIAO(nv) || nv === "zona" ? `<h3 class="h3c" style="margin-top:18px">Mapa de cada ${nv === "zona" ? "zona" : "região"} <small class="nota">cidades pintadas por ${esc(nomeModo(modo))} · clique numa cidade para ver detalhes</small></h3><div class="legenda">${legenda(modo, q)}</div><div class="galeria">${lista.slice().sort((a, b) => soma(b) - soma(a)).map(u => cartaoRegiao(u, modo, q, cidMap)).join("")}</div>` : "";
+  const pint = E.depPint || "rk";
+  const contMV = `<div class="card" style="margin-bottom:14px"><h3 class="h3c">Onde cada um foi o mais votado <small class="nota">lugares em que ficou em 1º entre os candidatos do mesmo cargo e ano</small></h3><div class="tab-wrap"><table><thead><tr><th>Recorte</th>${E.deps.map(s => `<th style="box-shadow:inset 0 -3px 0 ${s.cor}">${esc(s.d.nome)} ${s.d.ano}</th>`).join("")}</tr></thead><tbody>${NIV_DEP.map(([k, n]) => { const l = agrupar(k); return `<tr><td><b>${n}</b> <small class="nota">${l.length}</small></td>${E.deps.map((s, j) => { const v = l.filter(u => u["rk" + j] === 1).length; return `<td><b>${int(v)}</b> <small class="nota">${pct(v / l.length, 0)}</small></td>`; }).join("")}</tr>`; }).join("")}</tbody></table></div></div>`;
+  alvo.innerHTML = `<div class="sec-cab" style="margin-top:30px"><h2>Deputados por região</h2><p>A mesma comparação em todos os recortes de Minas. Escolha o recorte para mudar a tabela, os mapas de Minas e os mapas de cada região.</p></div>
+    <div class="linha-ctl"><span class="rot">Recorte</span><div class="seg" id="depNivel" role="group" aria-label="Recorte">${NIV_DEP.map(([k, n]) => `<button data-dn="${k}" aria-pressed="${k === nv}">${n}</button>`).join("")}</div></div>
+    <div class="linha-ctl"><span class="rot">Mapas</span><div class="seg" id="depPint" role="group" aria-label="Pintar os mapas por"><button data-dp="rk" aria-pressed="${pint === "rk"}">Onde foi o mais votado</button><button data-dp="dp" aria-pressed="${pint === "dp"}">% dos válidos</button></div></div>
+    ${contMV}${cont}${tabela}${mapasMG}${galeriaDep}`;
+}
+document.addEventListener("click", e => { const b = e.target.closest("#depNivel [data-dn]"); if (b) { E.depNivel = b.dataset.dn; depRegioes(); } const c = e.target.closest("#depPint [data-dp]"); if (c) { E.depPint = c.dataset.dp; depRegioes(); } });
 
 /* ---------------- buscas (lista que abre enquanto digita) */
 function preencherBuscas() {
