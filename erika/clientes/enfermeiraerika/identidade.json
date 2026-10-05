@@ -1,0 +1,14 @@
+{
+  "slug": "enfermeiraerika",
+  "projeto": "Lovable 'Tô com a Erika' 796fd845-27ca-433d-838e-b92aed67e6ee (GitHub Thur-zi/nurse-erika-connect; preview https://id-preview--796fd845-27ca-433d-838e-b92aed67e6ee.lovable.app) + GitHub Thur-zi/card-enfermeira-erika",
+  "primaria": "#2403da",
+  "secundaria": "#ff4e00",
+  "acento": "#11037f",
+  "fundo": "#2403da",
+  "fonte_titulo": "Deuterium",
+  "fonte_texto": "Figtree",
+  "logo": "logo-erika-2510-horizontal-cor.png",
+  "logo_fundo": "claro",
+  "observacoes": "Converted from oklch in src/styles.css: campaign-blue oklch(0.413 0.271 269.17) = #2403da (dominant color and page background from top to footer), campaign-orange oklch(0.669 0.223 37.19) = #ff4e00 (--primary on the site: CTAs, ribbon, the K in the logo), campaign-deep #11037f, campaign-deeper #090059 (footer), campaign-mid #1a03ab, ice #edebfb. Primaria was set to the blue (the identity color); on the site, buttons are orange on blue. The card uses #3A1BE8 / #1B0A8C / #FF5200 / #8E7CFF. Fonts: Deuterium (custom variable font, titles), Figtree (text); Anton and Montserrat 900 are also loaded. Logos (transparent): logo-erika-2510-horizontal-cor.png (blue and orange, for light backgrounds), logo-erika-2510-horizontal-branco.png and logo-erika-2510-vertical-branco.png (white and orange, for blue/dark backgrounds, which is what the site uses).",
+  "logo_cliente_fundo": "escuro"
+}

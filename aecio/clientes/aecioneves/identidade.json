@@ -1,0 +1,14 @@
+{
+  "slug": "aecioneves",
+  "projeto": "Lovable 'Minas Feliz Hub' 9ea2b780-bc53-433f-a2a1-05ff33fe5304 (GitHub Thur-zi/minas-feliz-unido, local C:\\dev\\minas-feliz-unido; preview https://id-preview--9ea2b780-bc53-433f-a2a1-05ff33fe5304.lovable.app)",
+  "primaria": "#0018f6",
+  "secundaria": "#061f42",
+  "acento": "#c4fb00",
+  "fundo": "#0b3c78",
+  "fonte_titulo": "Archivo",
+  "fonte_texto": "Inter",
+  "logo": "logo-aecio-456.png",
+  "logo_fundo": "escuro",
+  "observacoes": "Minas Feliz Hub is the Aecio Neves 456 campaign ('Minas Feliz de novo'; voting guide with logo-aecio-456). Colors from src/styles.css (hex): azul-marca #0018f6, azul-profundo #0b3c78, azul-tinta #061f42 (dark text), verde-limao #c4fb00 (CTA buttons with azul-tinta text; number 456 in the logo), verde-capa #d2fc2e, cinza-nevoa #f4f7fb. The main background is the gradient --brand-gradient: linear-gradient(118deg, #0b3c78, #0a2bd8, #0018f6); 'fundo' uses its first stop. Archivo is the display font and Inter is the text font (Google Fonts). Logos, converted from WebP: logo-aecio-456.png (white and lime, transparent, for blue/dark backgrounds; includes the line naming the alternates Gustavo Galassi and Marcelo Heringer) and selo-aecio-456.png (round blue seal, works on any background). No PSDB-specific material was found.",
+  "logo_cliente_fundo": "escuro"
+}

@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Resultados 2026 · Brasil · MOBI</title>
+<meta name="description" content="Apuração ao vivo das Eleições 2026 em todo o Brasil: Presidente, Governador, Senador e Deputados, por região, estado, cidade e colégio, com brancos, nulos e abstenção. Dados oficiais do TSE.">
+<meta name="theme-color" content="#090d11">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="pt_BR">
+<meta property="og:site_name" content="MOBI · Mobilização Inteligente">
+<meta property="og:title" content="Resultados 2026 · Brasil">
+<meta property="og:description" content="Apuração ao vivo em todo o Brasil: todos os estados, todos os cargos, mapas, cidades, colégios e comparações, com dados oficiais do TSE.">
+<meta property="og:url" content="https://resultado.mobinteligente.com.br/">
+<meta property="og:image" content="https://resultado.mobinteligente.com.br/marca/og-brasil.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://resultado.mobinteligente.com.br/marca/og-brasil.png">
+<link rel="icon" type="image/png" href="/marca/mobi-simbolo-64.png">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="/nacional/estilo.css">
+</head>
+<body>
+<div class="fundo" aria-hidden="true"></div>
+<div class="wrap">
+  <header class="topo">
+    <a href="/" aria-label="Início"><img src="/marca/mobi-logo-light.png" alt="MOBI — Mobilização Inteligente"></a>
+    <span class="tag"><span class="pulso" id="pulso"></span><span id="hora">Carregando dados do TSE…</span></span>
+  </header>
+  <div class="kicker">Apuração ao vivo · Eleições 2026</div>
+  <h1 id="titulo">Resultados Brasil</h1>
+  <div class="controles" id="controles">
+    <select class="sel" id="escopo" aria-label="Brasil, região ou estado"></select>
+    <div class="seg" id="cargos" role="group" aria-label="Cargo"></div>
+    <span id="painelUf"></span>
+  </div>
+  <nav class="abas" id="abas" role="tablist"></nav>
+  <main id="conteudo"></main>
+  <footer>FONTE: DADOS OFICIAIS TSE · ELEIÇÕES 2026 · MOBI — MOBILIZAÇÃO INTELIGENTE
+    <p style="letter-spacing:0;margin:8px 0 0;max-width:820px;line-height:1.5">Os resultados por estado e por cidade vêm dos arquivos oficiais de totalização do TSE. O detalhe por colégio e seção vem dos boletins de urna publicados pelo TSE e foi conferido com o arquivo oficial de detalhe da votação por seção: 2.068.212 registros comparados (seção por cargo), sem nenhuma diferença. 632 seções (0,13% do país) ainda não tiveram o boletim de urna publicado pelo TSE e não aparecem no detalhe por colégio; elas estão incluídas nos totais oficiais.</p></footer>
+</div>
+<div class="veu" id="veu"></div>
+<aside class="gaveta" id="gaveta" aria-label="Detalhe"></aside>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>window.ESTATICO_NAC = true;</script>
+<script src="/nacional/app.js"></script>
+</body>
+</html>

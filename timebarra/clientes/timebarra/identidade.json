@@ -1,0 +1,14 @@
+{
+  "slug": "timebarra",
+  "projeto": "Lovable 'Time Barra Mobiliza' c85dc756-de03-4968-ae04-54ae96a67671 (GitHub Thur-zi/time-barra-unity; preview https://id-preview--c85dc756-de03-4968-ae04-54ae96a67671.lovable.app)",
+  "primaria": "#018b27",
+  "secundaria": "#06126a",
+  "acento": "#f0aa02",
+  "fundo": "#fcfcfb",
+  "fonte_titulo": "Bebas Neue",
+  "fonte_texto": "Inter",
+  "logo": "logo-time-barra.png",
+  "logo_fundo": "claro",
+  "observacoes": "These are the official colors from the brand manual (Manual de Marca 2026) cited in styles.css: green #018b27, dark green #018022, gold #f0aa02, blue #06126a. Extra tones: primary-deep #0a5c1c, primary-darker #043d12 (sidebar). The hero uses a green gradient (#018b27 to #0a5c1c) with white text and a gold CTA (#f0aa02, text #2a1e00-ish). Barlow Condensed is the condensed font. logo-time-barra-white.png (white on transparent) is for dark/green backgrounds. Both logos were converted from WebP to PNG. The 'Time Barra Groups' project (f6f4f6d2) uses an older approximate palette (#046A38/#FFC629/#0033A0, font Archivo) and was not used.",
+  "logo_cliente_fundo": "escuro"
+}

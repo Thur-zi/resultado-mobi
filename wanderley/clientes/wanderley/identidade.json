@@ -1,0 +1,14 @@
+{
+  "slug": "wanderley",
+  "projeto": "Lovable 'Amigos Mobiliza' 76d0a18c-086b-45f7-a1a9-329360de1d5d (GitHub Thur-zi/amigo-conecta-ranking, local C:\\dev\\amigo-conecta-ranking; preview https://id-preview--76d0a18c-086b-45f7-a1a9-329360de1d5d.lovable.app) + GitHub Thur-zi/card-wanderley-fred",
+  "primaria": "#ea5b22",
+  "secundaria": "#3c4c55",
+  "acento": "#f8e9ca",
+  "fundo": "#f7f7f7",
+  "fonte_titulo": "Archivo",
+  "fonte_texto": "Archivo",
+  "logo": "logo-wanderley-porto-25333.png",
+  "logo_fundo": "claro",
+  "observacoes": "From src/styles.css (design system 'Amigos do Wanderley', hex values): brand-orange #ea5b22 (--primary, CTAs, hero background), brand-orange-deep #cf4715, brand-slate #3c4c55 / slate-deep #2a363d (text, dark sections), brand-cream #f8e9ca (cards/header pill), brand-coral #ff6e47, brand-paper #f7f7f7 (page background). Titles are Archivo 900 italic uppercase. The dobradinha card (card-wanderley-fred) uses the same palette: #E8551F / #35454E / #F7EBD2. Fred Costa has no separate site; his logo (slate badge with an orange number) uses the same colors. Logos: logo-wanderley-porto-25333.png (transparent, slate text, for light backgrounds) and logo-fred-costa-2533.png (self-contained slate badge, works on any background, converted from WebP). The 'Minas Feliz Hub' project is NOT theirs: it belongs to Aecio Neves. | logo-cliente: selo oficial da colinha (amigo-conecta-ranking/public/colinha), sem o número",
+  "logo_cliente_fundo": "escuro"
+}

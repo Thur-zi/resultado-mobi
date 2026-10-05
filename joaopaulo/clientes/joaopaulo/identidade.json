@@ -1,0 +1,15 @@
+{
+  "slug": "joaopaulo",
+  "projeto": "Lovable 'João Paulo 13113' e6f42687-ae2b-4640-b96d-5f767c61461c (GitHub Thur-zi/joao-paulo-13113; preview https://id-preview--e6f42687-ae2b-4640-b96d-5f767c61461c.lovable.app)",
+  "primaria": "#d12118",
+  "secundaria": "#f19f07",
+  "acento": "#ffd800",
+  "fundo": "#ffffff",
+  "fonte_titulo": "Archivo Black",
+  "fonte_texto": "Archivo",
+  "logo": "logo-horizontal-cor.png",
+  "logo_fundo": "claro",
+  "observacoes": "brand-red #d12118, brand-orange #f19f07, brand-yellow #ffd800 (number 13113 and CTAs on red), brand-gray #f4f4f4, black #000. The hero uses a gradient from #f19f07 through #d12118 to #c31d15. Other logos saved: logo-principal-cor.png (stacked, for light backgrounds) and logo-principal-branco.png (for red/dark backgrounds), both transparent. logo-horizontal-cor was converted from WebP to PNG. The 'Pernambuco Pulsa' project (f7a19d46) is the 'Pernambuco com Lula' petition, a different identity, and was not used.",
+  "logo_cabecalho": "logo-horizontal-cor.png",
+  "logo_cliente_fundo": "claro"
+}

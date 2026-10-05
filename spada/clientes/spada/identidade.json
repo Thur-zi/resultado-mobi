@@ -1,0 +1,14 @@
+{
+  "slug": "spada",
+  "projeto": "Lovable 'Spada Direct' e93bddcf-a51e-4683-90d1-e93de809f887 (preview https://id-preview--e93bddcf-a51e-4683-90d1-e93de809f887.lovable.app); confirmed in Terceiro Setor / Contadores / E-commerce (GitHub Thur-zi/terceiro-setor-com-spada, spadas-contadores-juntos, e-commerce-com-spada)",
+  "primaria": "#023f87",
+  "secundaria": "#009bdf",
+  "acento": "#edf222",
+  "fundo": "#fbfcfe",
+  "fonte_titulo": "Anton",
+  "fonte_texto": "Satoshi",
+  "logo": "logo-vertical-fundo-claro.png",
+  "logo_fundo": "claro",
+  "observacoes": "Consistent identity across all 4 projects: navy #023f87, blue #009bdf, lime #edf222. Extra tones: navy-deep #012a5e, deep blue #004465, footer blue #023e74, light blue #53bfd9, light background #dceefb (Spada Direct hero), WhatsApp green #21d954. Main background is #fbfcfe in the 3 landing pages; Spada Direct uses #dceefb at the top. logo-horizontal-fundo-escuro.png (light cyan/white, transparent) is for dark/navy backgrounds. The Lovable shadcn tokens are the template default; the brand lives in the custom tokens.",
+  "logo_cliente_fundo": "escuro"
+}

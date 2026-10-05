@@ -1,0 +1,14 @@
+{
+  "slug": "julianolopes",
+  "projeto": "Lovable 'Amigos do Juliano' d0e82584-1000-47a6-811e-c391024213aa (preview https://id-preview--d0e82584-1000-47a6-811e-c391024213aa.lovable.app) + GitHub Thur-zi/card-juliano-lopes",
+  "primaria": "#005180",
+  "secundaria": "#0099d1",
+  "acento": "#ffc300",
+  "fundo": "#005180",
+  "fonte_titulo": "DueraCond (Duera Condensed Bold)",
+  "fonte_texto": "Duera",
+  "logo": "logo-juliano-lopes.png",
+  "logo_fundo": "claro",
+  "observacoes": "Converted from hsl in src/styles.css (@theme): brand-navy hsl(202 100% 25%) = #005180 (--primary and page background), brand-blue hsl(196 100% 41%) = #0099d1 (ring, number balloon), brand-yellow hsl(46 100% 50%) = #ffc300 (CTA button, number 20789), brand-green hsl(80 100% 40%) = #88cc00 ('Deputado Estadual' kicker), brand-orange #ff6a00, off-white #f3f5f6. The card-juliano-lopes card states: blue #005D8B, light blue #00A7F5, yellow #FEC800. Fonts: Duera (custom TTF in public/fonts; DueraCond Bold for titles, Duera for text). Logos (transparent; the first two converted from WebP): logo-juliano-lopes.png ('Professor Juliano Lopes Deputado Estadual' in navy and light blue, for light backgrounds), logo-juliano-lopes-branco.png (white, for the navy background) and logo-juliano-lopes-horizontal.png (navy, with @professorjulianolopes, for light backgrounds). The logo does not include the number 20789.",
+  "logo_cliente_fundo": "escuro"
+}

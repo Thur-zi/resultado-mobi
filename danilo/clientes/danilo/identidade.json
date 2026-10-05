@@ -1,0 +1,14 @@
+{
+  "slug": "danilo",
+  "projeto": "GitHub Thur-zi/card-danilo-alvarenga (public/style.css, public/assets/logo.webp)",
+  "primaria": "#1b52b5",
+  "secundaria": "#07185a",
+  "acento": "#fddf0d",
+  "fundo": "#1b52b5",
+  "fonte_titulo": null,
+  "fonte_texto": null,
+  "logo": "logo-danilo-original.png",
+  "logo_fundo": "escuro",
+  "observacoes": "--fundo #1b52b5, --fundo-escuro #07185a, --destaque #fddf0d, --apoio #12d8ff",
+  "logo_cliente_fundo": "escuro"
+}

@@ -1,0 +1,14 @@
+{
+  "slug": "anapaula",
+  "projeto": "Lovable 'Cuidar com Dignidade' 71142e4e-7fd7-4dad-8ac2-932843725f66 (GitHub Thur-zi/cuidar-com-dignidade, local C:\\dev\\cuidar-com-dignidade), cross-checked with 'Ana's Friends Mobilize' deabae7b-6937-4a12-ae3d-43bc2b92c1d0 (Thur-zi/amigosdaana) and 'Vozes Unidas MG' 5ef91d25-d0e1-44cb-82a0-d340a4a59365 (Thur-zi/vozes-unidas-mg)",
+  "primaria": "#6d1eb2",
+  "secundaria": "#f33114",
+  "acento": "#fdc402",
+  "fundo": "#fff9f4",
+  "fonte_titulo": "Monigue",
+  "fonte_texto": "Montserrat",
+  "logo": "logo-ana-paula-13444.png",
+  "logo_fundo": "escuro",
+  "observacoes": "The official palette repeats across all three projects (hex in cuidar-com-dignidade and vozes-unidas styles.css): brand-purple #6d1eb2 (--primary in Vozes and Amigos da Ana, hero/sections in Cuidar), brand-red #f33114 (CTAs/action, star in the logo), brand-yellow #fdc402 (number 13444, highlights), brand-lilac #d7adf2 (name in the logo, cards), cream #fff9f4 (Cuidar background; Vozes uses #fdf7ec), deep purple #40116b. The 'Sou de' card uses a red background #EC1C24 with yellow #FEC707. Fonts: Monigue (custom font, display) in Cuidar, Vozes and the card; text is Montserrat (Cuidar) or Inter (Vozes, Amigos da Ana, whose display font is Anton). Logos: logo-ana-paula-13444.png (lilac name, yellow number, red star, transparent background, for purple/dark backgrounds; poor contrast on white) and logo-ana-paula-lilas-sem-numero.png (lilac only, no number). Note that Vozes Unidas also contains an 'Ana Pimentel' identity (Por Elas Duas), which was not used.",
+  "logo_cliente_fundo": "escuro"
+}

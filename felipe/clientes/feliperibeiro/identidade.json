@@ -1,0 +1,14 @@
+{
+  "slug": "feliperibeiro",
+  "projeto": "Lovable 'Amigos Mobiliza' 76d0a18c-086b-45f7-a1a9-329360de1d5d, page /felipe (GitHub Thur-zi/amigo-conecta-ranking, local C:\\dev\\amigo-conecta-ranking) + GitHub Thur-zi/card-felipe-dalmo",
+  "primaria": "#2d519f",
+  "secundaria": "#203a70",
+  "acento": "#ffb800",
+  "fundo": "#203a70",
+  "fonte_titulo": "Archivo",
+  "fonte_texto": "Archivo",
+  "logo": "logo-felipe-dalmo-ribeiro-2022.png",
+  "logo_fundo": "escuro",
+  "observacoes": "Felipe has no project of his own: his page (/felipe, /felipe/ranking, colinha-felipe) lives inside Amigos Mobiliza, shared with Wanderley. Variables in src/styles.css: felipe-azul #2d519f (text/buttons), felipe-azul-escuro #203a70 (page background), felipe-amarelo #ffb800, felipe-ciano #3edcff, felipe-azul-vivo #0037ff. The page CTAs use the shared brand-orange #ea5b22. The card-felipe-dalmo card uses slightly different values: azul #1B52B5, azulEscuro #07185A, amarelo #FDDF0D (closer to the yellow in the logo), ciano #12D8FF, with Montserrat Black Italic. The site font is Archivo (900 italic in titles). Logos: logo-felipe-dalmo-ribeiro-2022.png ('Deputado Federal FELIPE do Dalmo Ribeiro 2022', white and yellow, transparent, for blue/dark backgrounds) and logo-felipe-dalmo-ribeiro-sem-numero.png. 'Liga Sul Mineira' (a4404f00) is an amateur football league with no Felipe content, so it was not used.",
+  "logo_cliente_fundo": "escuro"
+}
