@@ -399,6 +399,22 @@ $("#csv").addEventListener("click", () => {
   Object.assign(document.createElement("a"), {href: URL.createObjectURL(new Blob(["﻿" + linhas.join("\n")], {type: "text/csv"})), download: `presidente-mg-${E.nivel}.csv`}).click();
 });
 
+
+// contornos das regiões: trechos de divisa entre cidades de regiões diferentes (e a divisa do estado)
+const BORDAS = {};
+function bordasRegiao(nivel, chaveDoIbge) {
+  if (BORDAS[nivel]) return BORDAS[nivel];
+  const cont = new Map();
+  for (const f of E.geo.features) {
+    const r = chaveDoIbge(f.properties.ibge), polys = f.geometry.type === "Polygon" ? [f.geometry.coordinates] : f.geometry.coordinates;
+    for (const p of polys) for (const anel of p) for (let i = 0; i < anel.length - 1; i++) {
+      const a = anel[i], b = anel[i + 1], k = (a[0] < b[0] || (a[0] === b[0] && a[1] < b[1])) ? a + "|" + b : b + "|" + a, e = cont.get(k);
+      if (e) { e.n++; if (e.r !== r) e.dif = true; } else cont.set(k, {r, n: 1, a, b});
+    }
+  }
+  const seg = []; for (const e of cont.values()) if (e.dif || e.n === 1) seg.push([[e.a[1], e.a[0]], [e.b[1], e.b[0]]]);
+  return BORDAS[nivel] = seg;
+}
 /* ---------------- mapa grande */
 function novoMapa(id) {
   const m = L.map(id, {scrollWheelZoom: false, zoomSnap: .25, preferCanvas: true});
@@ -479,6 +495,7 @@ function desenharMapa() {
       l.bindTooltip(foco ? `<b>${esc(u.nome)}</b><br><small>${vaiFocar ? "toque para ir até lá" : "toque para ver detalhes"}</small>` : dica(u) + (vaiFocar ? "<br><small style='color:#55b8e6'>toque para dar zoom</small>" : ""), {sticky: true});
       l.on("click", ev => vaiFocar ? focar(u.nivel, u.chave) : popover("mun", u.chave, ev));
     }}).addTo(grupo);
+  if (regiao && !foco) L.polyline(bordasRegiao(E.nivel, ib => E.B.municipios[E.munDe.get(ib)]?.[E.nivel]), {color: "#e9eef2", weight: 1.3, opacity: .8, interactive: false}).addTo(grupo);
   let listaRank = foco ? [...dentro.values()] : lista;
   if (E.nivel === "zona" && !foco) {
     listaRank = E.unidades;

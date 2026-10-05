@@ -27,6 +27,7 @@ function derivar(o) {
   o.ws = o.w / TW; o.fs = o.f / TF;
   o.rel = (o.w + o.f) ? Math.log2((o.ws + 1e-5) / (o.fs + 1e-5)) : null;
   o.razao = o.f ? o.w / o.f * 100 : null;
+  o.mais = (o.w + o.f) ? Math.log2((o.w + 1) / (o.f + 1)) : null;   // >0: Wanderley teve mais votos que o Fred no lugar
   o.f22p = o.v6_22 ? o.f22 / o.v6_22 : null; o.dF = o.fp != null && o.f22p != null ? o.fp - o.f22p : null; o.dFv = o.f - o.f22;
   o.wprd = o.p7 ? o.w / o.p7 : null; o.fprd = o.p6 ? o.f / o.p6 : null;
   return o;
@@ -46,7 +47,7 @@ const nivelMG = n => CACHE[n] || (CACHE[n] = agrupar(ESC, NIV[n][2], NIV[n][3], 
 /* ---------------- cores e modos */
 const mistura = (c, t) => { const a = parseInt(c.slice(1), 16), b = 0x1a2329; const r = s => Math.round(((b >> s) & 255) * (1 - t) + ((a >> s) & 255) * t); return `rgb(${r(16)},${r(8)},${r(0)})`; };
 const rampa = c => [.2, .38, .58, .8, 1].map(t => mistura(c, t));
-const MODOS = [["rel", "Quem é mais forte aqui"], ["wp", "Wanderley %"], ["fp", "Fred %"], ["w", "Wanderley votos"], ["f", "Fred votos"], ["razao", "Wanderley a cada 100 do Fred"], ["dF", "Fred 2022 → 2026"]];
+const MODOS = [["mais", "Quem teve mais votos"], ["rel", "Peso no total de cada um"], ["wp", "Wanderley %"], ["fp", "Fred %"], ["w", "Wanderley votos"], ["f", "Fred votos"], ["razao", "Wanderley a cada 100 do Fred"], ["dF", "Fred 2022 → 2026"]];
 const DIVREL = ["#2a8fc4", "#7cc4e8", "#8e979c", "#f2955f", "#ea5b22"];
 const DIVD = ["#d9534a", "#f09a8f", "#8e979c", "#8fe0b2", "#3fbf7a"];
 function quebras(v) { v = v.filter(x => x != null && isFinite(x)).sort((a, b) => a - b); return [.2, .4, .6, .8].map(q => v[Math.floor(q * (v.length - 1))]); }
@@ -54,12 +55,14 @@ function cor(u, modo, q) {
   if (!u || !(u.w + u.f + u.v7)) return "#26323a";
   const x = u[modo]; if (x == null || !isFinite(x)) return "#26323a";
   if (modo === "rel") return DIVREL[[-1, -.35, .35, 1].filter(t => x > t).length];
+  if (modo === "mais") return DIVREL[[-1, -.14, .14, 1].filter(t => x > t).length];
   if (modo === "dF") return DIVD[[-.01, -.002, .002, .01].filter(t => x > t).length];
   const r = /^w/.test(modo) ? rampa(COR.w) : /^f/.test(modo) ? rampa(COR.f) : rampa(COR.creme);
   return r[q.filter(t => x > t).length];
 }
 const fmt = (modo, x) => modo === "wp" || modo === "fp" ? pct(x, 2) : modo === "dF" ? pp(x, 2) : modo === "razao" ? dec(x, 0) : int(x);
 function legenda(modo, q) {
+  if (modo === "mais") return ["Fred com o dobro ou mais", "Fred teve mais votos", "praticamente empatados", "Wanderley teve mais votos", "Wanderley com o dobro ou mais"].map((t, i) => `<span><b style="background:${DIVREL[i]}"></b>${t}</span>`).join("") + `<span class="nota">(votos do Wanderley para estadual × votos do Fred para federal no mesmo lugar)</span>`;
   if (modo === "rel") return ["Fred bem mais forte", "Fred mais forte", "equilibrado", "Wanderley mais forte", "Wanderley bem mais forte"].map((t, i) => `<span><b style="background:${DIVREL[i]}"></b>${t}</span>`).join("") + `<span class="nota">(comparando o peso de cada lugar no total de cada um)</span>`;
   if (modo === "dF") return ["caiu mais de 1 p.p.", "caiu", "estável", "subiu", "subiu mais de 1 p.p."].map((t, i) => `<span><b style="background:${DIVD[i]}"></b>${t}</span>`).join("");
   const r = /^w/.test(modo) ? rampa(COR.w) : /^f/.test(modo) ? rampa(COR.f) : rampa(COR.creme);
@@ -67,7 +70,7 @@ function legenda(modo, q) {
 }
 const duas = u => `<span class="duas"><i class="bw" style="width:${Math.min(100, (u.wp || 0) / E.maxWp * 100)}%"></i><i class="bf" style="width:${Math.min(100, (u.fp || 0) / E.maxFp * 100)}%"></i></span>`;
 function dica(u, tipo) {
-  return `<b>${esc(u.nome)}</b>${tipo ? ` <small style="color:#8796a0">${tipo}</small>` : ""}<br><span style="color:${COR.w}">■</span> Wanderley: <b>${int(u.w)}</b> votos · ${pct(u.wp, 2)}<br><span style="color:${COR.f}">■</span> Fred: <b>${int(u.f)}</b> votos · ${pct(u.fp, 2)}<br>Wanderley a cada 100 do Fred: <b>${dec(u.razao, 0)}</b>${u.f22 ? `<br>Fred em 2022: ${int(u.f22)} votos (${pp(u.dF, 2)})` : ""}`;
+  return `<b>${esc(u.nome)}</b>${tipo ? ` <small style="color:#8796a0">${tipo}</small>` : ""}<br><span style="color:${COR.w}">■</span> Wanderley: <b>${int(u.w)}</b> votos · ${pct(u.wp, 2)}<br><span style="color:${COR.f}">■</span> Fred: <b>${int(u.f)}</b> votos · ${pct(u.fp, 2)}<br><b>${u.w === u.f ? "Empate" : u.w > u.f ? `<span style="color:${COR.w}">Wanderley</span> teve mais votos` : `<span style="color:${COR.f}">Fred</span> teve mais votos`}</b> · Wanderley a cada 100 do Fred: <b>${dec(u.razao, 0)}</b>${u.f22 ? `<br>Fred em 2022: ${int(u.f22)} votos (${pp(u.dF, 2)})` : ""}`;
 }
 
 /* ---------------- abertura: duelo e destaques */
@@ -145,13 +148,13 @@ function cidade(m, alvo) {
       <div class="kpi"><b>${dec(r, 2)}</b><span>correlação entre os dois nas escolas (−1 a +1)</span></div>
     </div>
     <p class="insight">${osm ? `Regional mais forte: <b class="cw">${esc(regW.nome)}</b> para o Wanderley (${pct(regW.wp, 2)}) e <b class="cf">${esc(regF.nome)}</b> para o Fred (${pct(regF.fp, 2)}). ` : ""}${bairW ? `Bairro mais forte: <b class="cw">${esc(bairW.nome)}</b> (${pct(bairW.wp, 2)}) e <b class="cf">${esc(bairF?.nome)}</b> (${pct(bairF?.fp, 2)}). ` : ""}Escola com mais votos: <b class="cw">${esc(topW.nome)}</b> (${int(topW.w)}) e <b class="cf">${esc(topF.nome)}</b> (${int(topF.f)}). ${Math.abs(r) < .2 ? "Os dois votam em lugares diferentes da cidade: a força de um quase não acompanha a do outro." : r > 0 ? "Onde um é forte, o outro tende a ser forte também: a dobradinha anda junta." : "Onde um é forte, o outro tende a ser mais fraco."}</p>
+    <div class="cab"><h3>Mapa${osm ? " de bairros, regionais e escolas" : " das escolas"}</h3></div>
+    <div class="linha"><span class="rot">Mostrar</span><div class="seg" data-camada="${m}">${(osm ? [["bairro", "Bairros"], ["regional", "Regionais"], ["escola", "Escolas"]] : [["escola", "Escolas"]]).map(([k, n]) => `<button data-v="${k}" aria-pressed="${(E.camada[m] || (osm ? "bairro" : "escola")) === k}">${n}</button>`).join("")}</div></div>
+    <div class="linha"><span class="rot">Pintar por</span><div class="seg" data-modo="${m}">${MODOS.map(([k, n]) => `<button data-v="${k}" aria-pressed="${(E.modo[m] || "mais") === k}">${n}</button>`).join("")}</div></div>
+    <div class="mapa-wrap"><div><div class="mapa" id="mapa-${id}"></div><div class="legenda" id="leg-${id}"></div></div><aside class="card lateral" id="lat-${id}"></aside></div>
     ${osm ? `<div class="cab"><h3>Por regional</h3></div>
     <div class="grid2"><div class="card"><h4>% dos válidos por regional</h4><canvas id="g-reg-${id}" height="300"></canvas></div><div class="card"><h4>De onde vieram os votos <small>parte do total da cidade em cada regional</small></h4><canvas id="g-regs-${id}" height="300"></canvas></div></div>
     <div class="card" style="margin-top:14px">${tabela(regs, "Regional", "reg-" + id)}</div>` : ""}
-    <div class="cab"><h3>Mapa${osm ? " de bairros, regionais e escolas" : " das escolas"}</h3></div>
-    <div class="linha"><span class="rot">Mostrar</span><div class="seg" data-camada="${m}">${(osm ? [["bairro", "Bairros"], ["regional", "Regionais"], ["escola", "Escolas"]] : [["escola", "Escolas"]]).map(([k, n]) => `<button data-v="${k}" aria-pressed="${(E.camada[m] || (osm ? "bairro" : "escola")) === k}">${n}</button>`).join("")}</div></div>
-    <div class="linha"><span class="rot">Pintar por</span><div class="seg" data-modo="${m}">${MODOS.map(([k, n]) => `<button data-v="${k}" aria-pressed="${(E.modo[m] || "rel") === k}">${n}</button>`).join("")}</div></div>
-    <div class="mapa-wrap"><div><div class="mapa" id="mapa-${id}"></div><div class="legenda" id="leg-${id}"></div></div><aside class="card lateral" id="lat-${id}"></aside></div>
     <div class="cab"><h3>Bairros</h3></div>
     <div class="grid2"><div class="card"><h4><span class="cw">Wanderley</span> · bairros com mais votos</h4>${rank(bairros, "w", 15)}</div><div class="card"><h4><span class="cf">Fred</span> · bairros com mais votos</h4>${rank(bairros, "f", 15)}</div></div>
     <div class="card" style="margin-top:14px">${tabela(bairros, "Bairro", "bai-" + id)}</div>
@@ -206,7 +209,7 @@ async function mapaCidade(m) {
   L.tileLayer("https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", {attribution: "Esri · OpenStreetMap · TSE", maxZoom: 17}).addTo(mapa);
   mapa.on("click focus", () => mapa.scrollWheelZoom.enable());
   E.mapas[id] = mapa;
-  const ctx = E.ctx[m], camada = E.camada[m] || (osm ? "bairro" : "escola"), modo = E.modo[m] || "rel";
+  const ctx = E.ctx[m], camada = E.camada[m] || (osm ? "bairro" : "escola"), modo = E.modo[m] || "mais";
   const lista = camada === "regional" ? ctx.regs : camada === "bairro" ? ctx.bairros : ctx.escs, q = quebras(lista.map(u => u[modo]));
   const porNome = new Map(lista.map(u => [u.nome, u])), grupo = L.featureGroup().addTo(mapa);
   if (osm && camada !== "escola") {
@@ -225,6 +228,9 @@ async function mapaCidade(m) {
   $("#leg-" + id).innerHTML = legenda(modo, q);
   const nomeC = {regional: "regionais", bairro: "bairros", escola: "escolas"}[camada], mn = MODOS.find(x => x[0] === modo)[1];
   const ordenada = lista.filter(u => u[modo] != null && isFinite(u[modo])).sort((a, b) => b[modo] - a[modo]);
+  const maisW = lista.filter(u => u.w > u.f).sort((a, b) => (b.w - b.f) - (a.w - a.f)), maisF = lista.filter(u => u.f > u.w).sort((a, b) => (b.f - b.w) - (a.f - a.w));
+  const itemD = u => `<li><button data-pop="${u.tipo}|${esc(u.chave)}|${m}"><span>${esc(u.nome)}</span><b><span class="cw">${int(u.w)}</span> · <span class="cf">${int(u.f)}</span></b></button></li>`;
+  if (modo === "mais") { $("#lat-" + id).innerHTML = `<h4>Quem teve mais votos <small>${nomeC}</small></h4><p class="nota"><b class="cw">${int(maisW.length)}</b> ${nomeC} com mais Wanderley · <b class="cf">${int(maisF.length)}</b> com mais Fred</p><h4 class="cw" style="margin-top:12px">Wanderley na frente</h4><ol class="rank">${maisW.slice(0, 10).map(itemD).join("") || "<li class='nota'>nenhum</li>"}</ol><h4 class="cf" style="margin-top:12px">Fred na frente</h4><ol class="rank">${maisF.slice(0, 10).map(itemD).join("") || "<li class='nota'>nenhum</li>"}</ol>`; return; }
   $("#lat-" + id).innerHTML = modo === "rel"
     ? `<h4>Onde cada um pesa mais <small>${nomeC}</small></h4><p class="nota">Compara o peso de cada lugar no total de votos de cada candidato.</p><h4 class="cw" style="margin-top:12px">Mais Wanderley</h4><ol class="rank">${ordenada.filter(u => u.w + u.f > 20).slice(0, 10).map(u => `<li><button data-pop="${u.tipo}|${esc(u.chave)}|${m}"><span>${esc(u.nome)}</span><b>${int(u.w)} · ${int(u.f)}</b></button></li>`).join("")}</ol><h4 class="cf" style="margin-top:12px">Mais Fred</h4><ol class="rank">${ordenada.filter(u => u.w + u.f > 20).reverse().slice(0, 10).map(u => `<li><button data-pop="${u.tipo}|${esc(u.chave)}|${m}"><span>${esc(u.nome)}</span><b>${int(u.w)} · ${int(u.f)}</b></button></li>`).join("")}</ol>`
     : `<h4>${esc(mn)} <small>${nomeC}</small></h4><h4 style="margin-top:10px">Maiores</h4><ol class="rank">${ordenada.slice(0, 12).map(u => `<li><button data-pop="${u.tipo}|${esc(u.chave)}|${m}"><span>${esc(u.nome)}</span><b>${fmt(modo, u[modo])}</b></button></li>`).join("")}</ol><h4 style="margin-top:12px">Menores</h4><ol class="rank">${ordenada.slice(-8).reverse().map(u => `<li><button data-pop="${u.tipo}|${esc(u.chave)}|${m}"><span>${esc(u.nome)}</span><b>${fmt(modo, u[modo])}</b></button></li>`).join("")}</ol>`;
@@ -243,7 +249,7 @@ function minas() {
     <div class="kpis"><div class="kpi"><b class="cw">${int(fora.w)}</b><span>votos do Wanderley fora de BH (${pct(fora.w / mg.w, 0)})</span></div><div class="kpi"><b class="cf">${int(fora.f)}</b><span>votos do Fred fora de BH (${pct(fora.f / mg.f, 0)})</span></div>
       <div class="kpi"><b>${int(ri.w)} · ${int(ri.f)}</b><span>no resto da região de BH (Wanderley · Fred)</span></div><div class="kpi"><b>${int(nivelMG("mun").filter(c => c.w > 0).length)} · ${int(nivelMG("mun").filter(c => c.f > 0).length)}</b><span>cidades com voto (Wanderley · Fred)</span></div></div>
     <div class="linha"><span class="rot">Ver por</span><div class="seg" id="nivelMG">${Object.entries(NIV).map(([k, v]) => `<button data-n="${k}" aria-pressed="${k === nv}">${v[0]}</button>`).join("")}</div></div>
-    <div class="linha"><span class="rot">Pintar por</span><div class="seg" data-modo="mg">${MODOS.map(([k, n]) => `<button data-v="${k}" aria-pressed="${(E.modo.mg || "rel") === k}">${n}</button>`).join("")}</div></div>
+    <div class="linha"><span class="rot">Pintar por</span><div class="seg" data-modo="mg">${MODOS.map(([k, n]) => `<button data-v="${k}" aria-pressed="${(E.modo.mg || "mais") === k}">${n}</button>`).join("")}</div></div>
     <div class="mapa-wrap"><div><div class="mapa" id="mapa-mg"></div><div class="legenda" id="leg-mg"></div></div><aside class="card lateral" id="lat-mg"></aside></div>
     <div class="grid2" style="margin-top:14px"><div class="card"><h4>As 20 cidades com mais votos dos dois</h4><canvas id="g-topcid" height="420"></canvas></div><div class="card"><h4>Macrorregiões: % dos válidos</h4><canvas id="g-macro" height="420"></canvas></div></div>
     <div class="card" style="margin-top:14px">${tabela(l, NIV[nv][1], "mg-" + nv)}</div>`;
@@ -262,12 +268,13 @@ async function mapaMG() {
   const mapa = L.map(el, {scrollWheelZoom: false, preferCanvas: true, zoomSnap: .25}); E.mapas.mg = mapa;
   L.tileLayer("https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", {attribution: "Esri · IBGE · TSE", maxZoom: 14}).addTo(mapa);
   mapa.on("click focus", () => mapa.scrollWheelZoom.enable());
-  const nv = E.nivelMG, modo = E.modo.mg || "rel", l = nivelMG(nv), nvMapa = nv === "zona" ? "mun" : nv, lm = nivelMG(nvMapa);
+  const nv = E.nivelMG, modo = E.modo.mg || "mais", l = nivelMG(nv), nvMapa = nv === "zona" ? "mun" : nv, lm = nivelMG(nvMapa);
   const unidadeDe = new Map(); for (const u of lm) for (const e of u.escolas) unidadeDe.set(e.mun, u);
   const ibgeMun = new Map(Object.entries(E.B.municipios).map(([m, x]) => [x.ibge, m])), q = quebras(lm.map(u => u[modo]));
   const grupo = L.featureGroup().addTo(mapa);
   L.geoJSON(E.geo, {style: f => { const u = unidadeDe.get(ibgeMun.get(f.properties.ibge)); return {color: nvMapa === "mun" ? "#141c21" : "rgba(20,28,33,.4)", weight: nvMapa === "mun" ? .4 : .2, fillOpacity: nv === "zona" ? .25 : .9, fillColor: cor(u, modo, q)}; },
     onEachFeature: (f, ly) => { const u = unidadeDe.get(ibgeMun.get(f.properties.ibge)); if (!u) return; ly.bindTooltip(dica(u, NIV[nvMapa][1].toLowerCase()), {sticky: true}); ly.on("click", ev => popover(u, ev.originalEvent)); }}).addTo(grupo);
+  if (nvMapa !== "mun") L.polyline(bordasRegiao(nvMapa, ib => NIV[nvMapa][2]({mun: ibgeMun.get(ib)})), {color: "#f8e9ca", weight: 1.4, opacity: .85, interactive: false}).addTo(grupo);
   if (nv === "zona") {
     const qz = quebras(l.map(u => u[modo])), mx = Math.max(...l.map(u => u.el));
     for (const u of l) { const c = u.escolas.filter(e => e.lat != null); if (!c.length) continue; const t = c.reduce((a, e) => a + e.el, 0), lat = c.reduce((a, e) => a + e.lat * e.el, 0) / t, lng = c.reduce((a, e) => a + e.lng * e.el, 0) / t;
@@ -277,10 +284,28 @@ async function mapaMG() {
   $("#leg-mg").innerHTML = legenda(modo, nv === "zona" ? quebras(l.map(u => u[modo])) : q);
   const ord = l.filter(u => u[modo] != null && isFinite(u[modo]) && u.w + u.f > 30).sort((a, b) => b[modo] - a[modo]), mn = MODOS.find(x => x[0] === modo)[1];
   const item = u => `<li><button data-pop="${u.tipo}|${esc(u.chave)}|"><span>${esc(u.nome)}</span><b>${modo === "rel" ? int(u.w) + " · " + int(u.f) : fmt(modo, u[modo])}</b></button></li>`;
+  if (modo === "mais") { const mw = l.filter(u => u.w > u.f).sort((a, b) => (b.w - b.f) - (a.w - a.f)), mf = l.filter(u => u.f > u.w).sort((a, b) => (b.f - b.w) - (a.f - a.w)), it = u => `<li><button data-pop="${u.tipo}|${esc(u.chave)}|"><span>${esc(u.nome)}</span><b><span class="cw">${int(u.w)}</span> · <span class="cf">${int(u.f)}</span></b></button></li>`;
+    $("#lat-mg").innerHTML = `<h4>Quem teve mais votos <small>${NIV[nv][0].toLowerCase()}</small></h4><p class="nota"><b class="cw">${int(mw.length)}</b> com mais Wanderley · <b class="cf">${int(mf.length)}</b> com mais Fred</p><h4 class="cw" style="margin-top:12px">Wanderley na frente</h4><ol class="rank">${mw.slice(0, 12).map(it).join("") || "<li class='nota'>nenhum</li>"}</ol><h4 class="cf" style="margin-top:12px">Fred na frente</h4><ol class="rank">${mf.slice(0, 12).map(it).join("")}</ol>`; return; }
   $("#lat-mg").innerHTML = modo === "rel" ? `<h4>Onde cada um pesa mais <small>${NIV[nv][0].toLowerCase()} com 30+ votos</small></h4><h4 class="cw" style="margin-top:10px">Mais Wanderley</h4><ol class="rank">${ord.slice(0, 12).map(item).join("")}</ol><h4 class="cf" style="margin-top:12px">Mais Fred</h4><ol class="rank">${ord.slice().reverse().slice(0, 12).map(item).join("")}</ol>`
     : `<h4>${esc(mn)} <small>${NIV[nv][0].toLowerCase()}</small></h4><ol class="rank">${ord.slice(0, 25).map(item).join("")}</ol>`;
 }
 
+
+// contornos das regiões: trechos de divisa entre cidades de regiões diferentes (e a divisa do estado)
+const BORDAS = {};
+function bordasRegiao(nivel, chaveDoIbge) {
+  if (BORDAS[nivel]) return BORDAS[nivel];
+  const cont = new Map();
+  for (const f of E.geo.features) {
+    const r = chaveDoIbge(f.properties.ibge), polys = f.geometry.type === "Polygon" ? [f.geometry.coordinates] : f.geometry.coordinates;
+    for (const p of polys) for (const anel of p) for (let i = 0; i < anel.length - 1; i++) {
+      const a = anel[i], b = anel[i + 1], k = (a[0] < b[0] || (a[0] === b[0] && a[1] < b[1])) ? a + "|" + b : b + "|" + a, e = cont.get(k);
+      if (e) { e.n++; if (e.r !== r) e.dif = true; } else cont.set(k, {r, n: 1, a, b});
+    }
+  }
+  const seg = []; for (const e of cont.values()) if (e.dif || e.n === 1) seg.push([[e.a[1], e.a[0]], [e.b[1], e.b[0]]]);
+  return BORDAS[nivel] = seg;
+}
 /* ---------------- escolas de todo o estado */
 function escolas() {
   const todas = ESC.map(e => Object.assign(derivar({...e, n: 1}), {nome: `${e.nome}`, tipo: "escola", chave: e.id, escolas: [e]})).filter(u => u.w + u.f > 0);
