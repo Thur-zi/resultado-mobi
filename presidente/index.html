@@ -36,14 +36,13 @@
   <section id="destaques" aria-label="Destaques"><div class="dest-grid" id="destGrid"><div class="carregando">Carregando os dados oficiais…</div></div></section>
 
   <div class="controles" id="controles">
-    <nav class="abas" id="abas" role="tablist" aria-label="Seções">
-      <button role="tab" data-aba="geral" aria-selected="true">Visão geral</button>
-      <button role="tab" data-aba="mapa" aria-selected="false">Mapa</button>
-      <button role="tab" data-aba="regioes" aria-selected="false">Regiões</button>
-      <button role="tab" data-aba="tabela" aria-selected="false">Tabela</button>
-      <button role="tab" data-aba="deps" aria-selected="false">Deputados <span id="nDeps" class="bolinha" hidden></span></button>
-      <button role="tab" data-aba="lugar" aria-selected="false" id="abaLugar" hidden><span class="pin" aria-hidden="true"></span><span id="abaLugarNome">Lugar</span></button>
+    <nav class="modos" id="modos" role="tablist" aria-label="O que ver">
+      <button role="tab" data-g="pres" aria-selected="true"><span class="m-ico pres" aria-hidden="true"></span><span><b>Presidente</b><small>2022 × 2026</small></span></button>
+      <button role="tab" data-g="deps" aria-selected="false"><span class="m-ico deps" aria-hidden="true"></span><span><b>Deputados <span id="nDeps" class="bolinha" hidden></span></b><small>federais e estaduais</small></span></button>
+      <button role="tab" data-g="mesc" aria-selected="false"><span class="m-ico mesc" aria-hidden="true"></span><span><b>Presidente × Deputados</b><small>cruzamento</small></span></button>
+      <button role="tab" data-g="lugar" aria-selected="false" id="abaLugar" hidden><span class="pin" aria-hidden="true"></span><span><b id="abaLugarNome">Lugar</b><small id="abaLugarTipo">lugar escolhido</small></span></button>
     </nav>
+    <nav class="abas" id="abas" role="tablist" aria-label="Seções"></nav>
     <div class="barra">
       <div class="grupo"><span class="rot">2026 contra</span>
         <div class="seg" id="turno" role="group" aria-label="Comparar 2026 com">
@@ -53,6 +52,17 @@
         <input id="qUnidade" list="lUnidades" placeholder="Buscar cidade, zona, macrorregião ou região…" autocomplete="off" aria-label="Buscar cidade, zona ou região"><datalist id="lUnidades"></datalist></label>
     </div>
   </div>
+
+  <section id="seletorDeps" hidden>
+    
+    <div class="dep-busca card"><div class="db-tit"><b>Escolha até 4 deputados</b><span>Federal ou estadual, 2022 ou 2026. Com um só, ele ocupa a tela toda; com mais de um, ficam lado a lado.</span></div>
+      <label class="busca grande"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>
+        <input id="qDep" list="lDeps" placeholder="Digite o nome de um deputado…" autocomplete="off" aria-label="Escolher deputado"><datalist id="lDeps"></datalist></label>
+      <div class="seg" id="filtroCargo" role="group" aria-label="Cargo"><button data-c="0" aria-pressed="true">Todos</button><button data-c="6">Federais</button><button data-c="7">Estaduais</button></div>
+      <div class="seg" id="filtroAno" role="group" aria-label="Ano"><button data-a="0" aria-pressed="true">2022 e 2026</button><button data-a="26">2026</button><button data-a="22">2022</button></div>
+      <div id="chips" class="chips"></div>
+    </div>
+  </section>
 
   <!-- Visão geral -->
   <section class="painel" id="p-geral" role="tabpanel">
@@ -100,15 +110,17 @@
 
   <!-- Deputados -->
   <section class="painel" id="p-deps" role="tabpanel" hidden>
-    <div class="sec-cab"><h2>Deputados federais e estaduais · 2022 e 2026</h2><p>Escolha até <b>4 deputados</b>, de qualquer ano e cargo. Eles aparecem lado a lado, entram nos mapas e na tabela e são cruzados com o voto para Presidente.</p></div>
-    <div class="dep-busca card">
-      <label class="busca grande"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>
-        <input id="qDep" list="lDeps" placeholder="Digite o nome de um deputado…" autocomplete="off" aria-label="Escolher deputado"><datalist id="lDeps"></datalist></label>
-      <div class="seg" id="filtroCargo" role="group" aria-label="Cargo"><button data-c="0" aria-pressed="true">Todos</button><button data-c="6">Federais</button><button data-c="7">Estaduais</button></div>
-      <div class="seg" id="filtroAno" role="group" aria-label="Ano"><button data-a="0" aria-pressed="true">2022 e 2026</button><button data-a="26">2026</button><button data-a="22">2022</button></div>
-      <div id="chips" class="chips"></div>
-    </div>
+    <div class="sec-cab"><h2 id="depTitulo">Deputados</h2><p id="depSub"></p></div>
     <div id="depCorpo"></div>
+  </section>
+
+  <!-- Deputados por região -->
+  <section class="painel" id="p-depreg" role="tabpanel" hidden><div id="depReg"></div></section>
+
+  <!-- Presidente × Deputados -->
+  <section class="painel" id="p-mesc" role="tabpanel" hidden>
+    <div class="sec-cab"><h2>Presidente × Deputados</h2><p>Como o voto de cada deputado escolhido se cruza com o voto para Presidente do mesmo ano: onde ele foi o mais votado e quem venceu ali, em que tipo de cidade é mais forte e a coincidência cidade por cidade.</p></div>
+    <div id="mescCorpo"></div>
   </section>
 
   <!-- Lugar escolhido -->
