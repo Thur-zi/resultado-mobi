@@ -927,7 +927,7 @@ function recalcular() {
   topDeps("mg", $("#geralTop"), "Deputados mais votados em Minas");
   const n22 = B.deputados.filter(d => d.ano === 22).length, n26 = B.deputados.length - n22;
   $("#fontesTexto").innerHTML = `<p><b>Presidente 2022:</b> TSE, dados abertos (votação por candidato e detalhe da votação por município e zona eleitoral), 1º e 2º turnos, Minas Gerais.</p>
-    <p><b>Presidente 2026:</b> boletins de urna publicados pelo TSE, somados por município e zona e conferidos com o arquivo oficial de detalhe por seção. Os totais podem ficar alguns votos abaixo do oficial por causa de poucas seções sem boletim publicado.</p>
+    <p><b>2026:</b> arquivos oficiais do TSE de votação e de detalhe por seção (dados abertos), somados por município e zona. Os totais batem com o resultado oficial do TSE.</p>
     <p><b>Deputados:</b> ${int(n26)} candidatos de 2026 e ${int(n22)} de 2022 com voto em Minas (federais e estaduais). O % é sobre os votos válidos do mesmo cargo e ano. A mesma pessoa nos dois anos é ligada pelo nome completo registrado no TSE.</p>
     <p><b>Fotos:</b> fotos oficiais de candidatura divulgadas pelo TSE (2022: pacote de dados abertos; 2026: site de resultados).</p>
     <p><b>Regiões:</b> macrorregiões e microrregiões = mesorregiões e microrregiões geográficas do IBGE (Triângulo, Zona da Mata, Sul de Minas…); regiões intermediárias e imediatas = divisão regional atual do IBGE. <b>Zonas:</b> zonas eleitorais do TSE, posicionadas no mapa pelo centro dos seus locais de votação; no mapa de uma zona, cada cidade mostra só a parte dela que fica na zona.</p>
