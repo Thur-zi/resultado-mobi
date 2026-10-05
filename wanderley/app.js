@@ -82,7 +82,6 @@ function remover(k) {
 
 /* ------------------------------------------------------------------ carga de dados */
 async function atualizarStatus() {
-  if (window.disponiveisEstatico && !S.disponiveis) S.disponiveis = await window.disponiveisEstatico;
   S.status = await api("api/status");
   S.cands = await api("api/candidatos");
   S.idx = new Map(S.cands.map(c => [chave(c), c]));
@@ -161,8 +160,6 @@ function renderAdd() {
     .concat(cargos.map(c => `<button data-c="${c}" aria-pressed="${S.addCargo === c}">${esc(NOME_CARGO[c] || c)}</button>`)).join("");
   const q = norm(addInput.value.trim());
   let lista = S.cands.filter(c => !S.addCargo || c.cargo === S.addCargo);
-  // versão final: só os candidatos com mapas prontos
-  if (S.disponiveis) lista = lista.filter(c => S.disponiveis.has(chave(c)));
   if (q) lista = lista.filter(c => String(c.numero).startsWith(q) || norm(c.nomeUrna).includes(q) || norm(c.nome).includes(q) || norm(c.partido) === q);
   lista = lista.slice().sort((a, b) => (String(a.numero) === q ? -1 : 0) - (String(b.numero) === q ? -1 : 0) || b.votos - a.votos || a.nomeUrna.localeCompare(b.nomeUrna));
   const sel = new Set(S.sel.map(chave));
@@ -170,7 +167,6 @@ function renderAdd() {
       <span><b>${esc(titulo(c.nomeUrna))}</b> <span class="nota">${esc(c.partido)}</span></span>
       <small>${esc(NOME_CARGO[c.cargo] || "")}${c.votos ? " · " + int(c.votos) : ""}</small></button>`).join("")
     || `<div class="vazio">${S.cands.length ? "Nenhum candidato encontrado" : "Carregando lista de candidatos do TSE…"}</div>`;
-  if (S.disponiveis) $("#addRes").insertAdjacentHTML("beforeend", `<div class="nota" style="padding:8px 12px">Versão final: mapas prontos para os candidatos do painel e os 3 mais votados de cada cargo.</div>`);
 }
 $("#addRes").addEventListener("click", e => {
   const b = e.target.closest("button[data-k]"); if (!b) return;

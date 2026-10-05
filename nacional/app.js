@@ -164,7 +164,7 @@ function renderControles() {
   const abas = [["resultado", "Resultado"], ["mapa", "Mapa"], ["todos", "Mapa de todos os candidatos"], ["regioes", "Regiões e estados"], ["cidades", "Cidades"], ["escolas", "Colégios"], ["candidatos", "Comparar candidatos"], ["comparar", "Comparar cidades"]];
   $("#abas").innerHTML = abas.map(([k, n]) => `<button role="tab" data-a="${k}" aria-selected="${N.aba === k}">${n}${k === "comparar" && N.cmp.length ? ` (${N.cmp.length})` : k === "candidatos" && N.cmpCand.length ? ` (${N.cmpCand.length})` : ""}</button>`).join("");
   $("#titulo").textContent = `${cargoNome(N.cargo)} · ${nomeEscopo()}`;
-  $("#painelUf").innerHTML = ehUF(N.escopo) && !window.ESTATICO_NAC ? `<a class="btn" href="/${N.escopo}/">Painel completo de ${esc(NOMES[N.escopo])} →</a>` : "";
+  $("#painelUf").innerHTML = ehUF(N.escopo) ? `<a class="btn" href="/${N.escopo}/">Painel completo de ${esc(NOMES[N.escopo])} →</a>` : "";
 }
 $("#escopo").addEventListener("change", e => irPara(e.target.value));
 $("#cargos").addEventListener("click", e => { const b = e.target.closest("button[data-c]"); if (!b || b.disabled) return; N.cargo = Number(b.dataset.c); N.modo = "lider"; render(); });
@@ -874,7 +874,7 @@ async function abrirCidade(uf, mun, n) {
   let r = null; try { r = await api(`/municipio.json?uf=${uf}&mun=${mun}&cargo=${cargo}`); } catch {}
   const salvo = N.cargo; N.cargo = cargo;
   g.innerHTML = `<button class="btn fechar" id="gFechar" aria-label="Fechar">✕</button><div class="kicker" style="margin-top:0">${esc(cargoNome(cargo))} · ${esc(NOMES[uf])}</div><h2 style="margin:10px 0 14px">${esc(nome(n))}</h2>
-    <div class="barra-ferr"><button class="btn prim" id="gCmp">Adicionar à comparação</button><button class="btn" id="gEsc">Ver colégios</button>${window.ESTATICO_NAC ? "" : `<a class="btn" href="/${uf}/">Painel do estado</a>`}</div>
+    <div class="barra-ferr"><button class="btn prim" id="gCmp">Adicionar à comparação</button><button class="btn" id="gEsc">Ver colégios</button><a class="btn" href="/${uf}/">Painel do estado</a></div>
     ${r ? kpis(r).replace('class="kpis"', 'class="kpis" style="grid-template-columns:repeat(2,1fr)"') + listaCands(r, 30) : `<div class="vazio">Resultado oficial indisponível agora.</div>`}`;
   N.cargo = salvo;
   $("#gFechar").onclick = fecharGaveta;

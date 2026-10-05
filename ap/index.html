@@ -1,6 +1,89 @@
-<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Resultados 2026 · Amapá · MOBI</title><meta property="og:title" content="Resultados 2026 · Amapá">
-<meta property="og:description" content="Resultado final das Eleições 2026 em Amapá: todos os cargos e candidatos, com dados oficiais do TSE.">
-<meta property="og:image" content="https://resultado.mobinteligente.com.br/ap/og.png"><meta name="twitter:card" content="summary_large_image">
-<meta http-equiv="refresh" content="0; url=/#e=ap&c=1&a=resultado"><script>location.replace("/#e=ap&c=1&a=resultado");</script></head>
-<body style="background:#090d11;color:#a7adb4;font-family:system-ui"><a href="/#e=ap&c=1&a=resultado" style="color:#55b8e6">Abrir resultados de Amapá</a></body></html>
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Resultados 2026 · Amapá · MOBI</title>
+<meta name="description" content="Apuração ao vivo em Amapá: todos os cargos e todos os candidatos por cidade, bairro, escola e seção, direto dos boletins de urna do TSE.">
+<meta name="theme-color" content="#090d11">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="pt_BR">
+<meta property="og:site_name" content="MOBI · Mobilização Inteligente">
+<meta property="og:title" content="Resultados 2026 · Amapá">
+<meta property="og:description" content="Apuração ao vivo em Amapá: todos os cargos e todos os candidatos por cidade, bairro, escola e seção, direto dos boletins de urna do TSE.">
+<meta property="og:url" content="https://resultado.mobinteligente.com.br/ap/">
+<meta property="og:image" content="https://resultado.mobinteligente.com.br/ap/clientes/geral-ap/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Resultados 2026 · Amapá">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Resultados 2026 · Amapá">
+<meta name="twitter:description" content="Apuração ao vivo em Amapá: todos os cargos e todos os candidatos por cidade, bairro, escola e seção, direto dos boletins de urna do TSE.">
+<meta name="twitter:image" content="https://resultado.mobinteligente.com.br/ap/clientes/geral-ap/og.png">
+<link rel="icon" type="image/png" href="marca/mobi-simbolo-64.png">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="style.css">
+<style></style>
+<script>window.CLIENTE = {"slug":"geral-ap","titulo":"Amapá","logo":null,"logoClaro":false,"geral":true,"uf":"ap","candidatos":[],"historico":[],"tema":null};</script>
+</head>
+<body>
+<div class="fundo" aria-hidden="true"><div class="grade"></div></div>
+
+<header class="topo">
+  <div class="topo-in">
+    <a class="marca" id="marca" href="./" aria-label="Amapá">
+      <img class="logo" src="marca/mobi-logo-light.png" alt="MOBI — Mobilização Inteligente">
+    </a>
+    <span class="sep" aria-hidden="true"></span>
+    <div class="chips" id="chips" role="group" aria-label="Candidatos acompanhados"></div>
+    <div class="add-wrap">
+      <button class="btn btn-glow" id="addBtn" aria-expanded="false">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        Candidato
+      </button>
+      <div class="add-pop" id="addPop">
+        <div class="campo">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input id="addInput" type="search" placeholder="Nome do candidato" autocomplete="off" aria-label="Buscar candidato">
+        </div>
+        <div class="grupo-seg" id="addCargos"></div>
+        <div class="resultados" id="addRes" role="listbox"></div>
+      </div>
+    </div>
+  </div>
+  <div class="abas-wrap">
+    <nav class="abas" role="tablist" id="abas"></nav>
+  </div>
+</header>
+
+<main id="conteudo"></main>
+
+<footer>
+  <img src="marca/mobi-simbolo-64.png" alt="">
+  <span id="rodape">Painel desenvolvido pela <b>MOBI · Mobilização Inteligente</b> para Amapá. Fonte: TSE — divulgação oficial de resultados e boletins de urna; atualização automática a cada 30 segundos.</span>
+</footer>
+
+<div class="veu" id="veu"></div>
+<aside class="gaveta" id="gaveta" aria-hidden="true" role="dialog" aria-label="Detalhe">
+  <div class="gaveta-topo">
+    <button class="voltar" id="gavetaVoltar" hidden aria-label="Voltar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg></button>
+    <span class="trilha" id="gavetaTrilha"></span>
+    <button class="fechar" id="gavetaFechar" aria-label="Fechar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+  </div>
+  <div class="gaveta-corpo" id="gavetaCorpo"></div>
+</aside>
+<div class="tip" id="tip"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3-delaunay@6.0.4/dist/d3-delaunay.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/polygon-clipping@0.15.7/dist/polygon-clipping.umd.min.js"></script>
+<script>window.ESTATICO = {uf: "ap", slug: "geral-ap", base: "/dados/ap/p/"};</script>
+<script src="estatico.js"></script>
+<script src="cidades.js"></script>
+<script src="historico.js"></script>
+<script src="cadeiras.js"></script>
+<script src="regioes.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
