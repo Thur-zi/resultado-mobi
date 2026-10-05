@@ -15,6 +15,29 @@ Chart.defaults.color = "#b8c3c8"; Chart.defaults.font.family = "Inter Tight, sys
 const BH = "41238";
 const E = {aba: "bh", graficos: {}, mapas: {}, osm: {}, cidade: null, nivelMG: "mun", modo: {}, camada: {}, ordem: {}, filtro: {}};
 
+/* ---------------- animações: números contando, entrada ao rolar e gráficos que começam ao aparecer */
+const calmo = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const NUM = /\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+(?:,\d+)?/g;
+function contar(el) {
+  if (calmo || el.dataset.contou) return; el.dataset.contou = 1;
+  const nos = []; const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT); while (w.nextNode()) { NUM.lastIndex = 0; if (NUM.test(w.currentNode.nodeValue)) nos.push([w.currentNode, w.currentNode.nodeValue]); }
+  NUM.lastIndex = 0; if (!nos.length) return;
+  const t0 = performance.now(), dur = 1100, ease = x => 1 - Math.pow(1 - x, 3);
+  const passo = agora => {
+    const k = ease(Math.min(1, (agora - t0) / dur));
+    for (const [n, orig] of nos) n.nodeValue = orig.replace(NUM, m => { const casas = (m.split(",")[1] || "").length, v = parseFloat(m.replace(/\./g, "").replace(",", ".")) * k; return v.toLocaleString("pt-BR", {minimumFractionDigits: casas, maximumFractionDigits: casas, useGrouping: m.includes(".") || v >= 10000}); });
+    if (k < 1) requestAnimationFrame(passo); else for (const [n, orig] of nos) n.nodeValue = orig;
+  };
+  requestAnimationFrame(passo);
+}
+const obsEntrada = "IntersectionObserver" in window ? new IntersectionObserver(es => es.forEach(e => { if (!e.isIntersecting) return; const el = e.target; el.classList.add("visto"); el.querySelectorAll("[data-conta]").forEach(contar); if (el.matches("[data-conta]")) contar(el); obsEntrada.unobserve(el); }), {threshold: .12}) : null;
+function animar(raiz) {
+  const els = raiz.querySelectorAll(".card,.kpi,.dest,.lado,.meio,.insight,.cab,.mapa-wrap,.linha");
+  els.forEach((el, i) => { el.classList.add("anim"); el.style.setProperty("--atraso", (i % 6) * 60 + "ms"); if (obsEntrada) obsEntrada.observe(el); else el.classList.add("visto"); });
+  raiz.querySelectorAll(".nums b,.dest b,.kpi b,.meio .mbl em,.pp b").forEach(b => b.setAttribute("data-conta", ""));
+}
+const obsGraf = "IntersectionObserver" in window ? new IntersectionObserver(es => es.forEach(e => { if (!e.isIntersecting) return; const f = E.pendentes?.get(e.target.id); if (f) { E.pendentes.delete(e.target.id); f(); } obsGraf.unobserve(e.target); }), {threshold: .15}) : null;
+
 /* ---------------- agregação */
 let ESC = [], TW = 1, TF = 1, TF22 = 1;
 function soma(lista) {
@@ -87,6 +110,7 @@ function duelo() {
         <div class="mbs"><div class="mbl"><i class="bf" style="width:100%"></i><em>Fred 100</em></div><div class="mbl"><i class="bw" style="width:${Math.min(100, r)}%"></i><em>Wanderley ${dec(r, 0)}</em></div></div></div>`).join("")}
     </div>` +
     lado("f", c.f, "fred.jpg", "selo-fred.png");
+  animar($("#duelo"));
 }
 function destaques() {
   const mg = soma(ESC), bh = soma(ESC.filter(e => e.mun === BH)), cid = nivelMG("mun");
@@ -101,6 +125,7 @@ function destaques() {
     <div class="dest"><span class="dl">Cidades com voto</span><b><span class="cw">${int(soW)}</span> · <span class="cf">${int(soF)}</span></b><span>Wanderley · Fred · os dois juntos em ${int(ambos)} cidades</span></div>
     <div class="dest"><span class="dl">Fred · 2022 → 2026</span><b class="${c.f.votos >= c.f.votos22 ? "pos" : "neg"}">${int(c.f.votos22)} → ${int(c.f.votos)}</b><span>${pct(c.f.votos / c.f.votos22 - 1)} · em 2022 pelo ${esc(c.f.partido22)}</span></div>
     <div class="dest"><span class="dl">Peso no partido (PRD)</span><b><span class="cw">${pct(mg.wprd, 0)}</span> · <span class="cf">${pct(mg.fprd, 0)}</span></b><span>dos votos do PRD para estadual · para federal, em Minas</span></div>`;
+  animar($("#destaques"));
 }
 
 /* ---------------- abas */
@@ -117,7 +142,16 @@ function irAba(a, rolar = true) {
   if (rolar) { const ctl = $("#controles"), fixa = getComputedStyle(ctl).position === "sticky" ? ctl.offsetHeight : 0; scrollTo({top: $("#p-" + a).getBoundingClientRect().top + scrollY - fixa - 10, behavior: "smooth"}); }
 }
 $("#abas").addEventListener("click", e => { const b = e.target.closest("[data-aba]"); if (b) irAba(b.dataset.aba); });
-function grafico(id, cfg) { E.graficos[id]?.destroy(); const el = document.getElementById(id); if (el) E.graficos[id] = new Chart(el, cfg); }
+// clique numa barra/bolinha leva ao lugar no mapa
+const aoClicar = f => ({onClick: (ev, els) => { if (els[0]) f(els[0].index); }, onHover: (ev, els) => { ev.native.target.style.cursor = els.length ? "pointer" : "default"; }});
+function grafico(id, cfg, clique) {
+  E.graficos[id]?.destroy(); const el = document.getElementById(id); if (!el) return;
+  if (clique) Object.assign(cfg.options = cfg.options || {}, aoClicar(clique));
+  cfg.options = Object.assign({animation: {duration: calmo ? 0 : 1100, easing: "easeOutQuart"}}, cfg.options);
+  const criar = () => { E.graficos[id] = new Chart(el, cfg); };
+  if (!obsGraf) return criar();
+  (E.pendentes = E.pendentes || new Map()).set(id, criar); obsGraf.observe(el);
+}
 const grade = {color: "rgba(248,233,202,.07)"};
 
 /* ---------------- uma cidade (BH e as cidades com regionais) */
@@ -128,7 +162,8 @@ function chipsCidades() {
 }
 $("#chipsCid").addEventListener("click", e => { const b = e.target.closest("[data-cid]"); if (!b) return; E.cidade = b.dataset.cid; chipsCidades(); cidade(E.cidade, $("#cidadeCorpo")); });
 
-function cidade(m, alvo) {
+function cidade(m, alvo) { E.desenhando = cidade_(m, alvo); return E.desenhando; }
+function cidade_(m, alvo) {
   const lista = ESC.filter(e => e.mun === m), u = soma(lista), nome = MUN(m).nome, osm = E.B.cidadesOSM.includes(m), id = "c" + m;
   const regs = osm ? agrupar(lista, e => e.regional, null, "regional").sort((a, b) => b.el - a.el) : [];
   const bairros = agrupar(lista, e => e.bairro, null, "bairro");
@@ -153,30 +188,31 @@ function cidade(m, alvo) {
     <div class="linha"><span class="rot">Pintar por</span><div class="seg" data-modo="${m}">${MODOS.map(([k, n]) => `<button data-v="${k}" aria-pressed="${(E.modo[m] || "mais") === k}">${n}</button>`).join("")}</div></div>
     <div class="mapa-wrap"><div><div class="mapa" id="mapa-${id}"></div><div class="legenda" id="leg-${id}"></div></div><aside class="card lateral" id="lat-${id}"></aside></div>
     ${osm ? `<div class="cab"><h3>Por regional</h3></div>
-    <div class="grid2"><div class="card"><h4>% dos válidos por regional</h4><canvas id="g-reg-${id}" height="300"></canvas></div><div class="card"><h4>De onde vieram os votos <small>parte do total da cidade em cada regional</small></h4><canvas id="g-regs-${id}" height="300"></canvas></div></div>
+    <div class="grid2"><div class="card"><h4>% dos válidos por regional <small>toque numa barra para ver no mapa</small></h4><canvas id="g-reg-${id}" height="300"></canvas></div><div class="card"><h4>De onde vieram os votos <small>parte do total da cidade em cada regional</small></h4><canvas id="g-regs-${id}" height="300"></canvas></div></div>
     <div class="card" style="margin-top:14px">${tabela(regs, "Regional", "reg-" + id)}</div>` : ""}
     <div class="cab"><h3>Bairros</h3></div>
     <div class="grid2"><div class="card"><h4><span class="cw">Wanderley</span> · bairros com mais votos</h4>${rank(bairros, "w", 15)}</div><div class="card"><h4><span class="cf">Fred</span> · bairros com mais votos</h4>${rank(bairros, "f", 15)}</div></div>
     <div class="card" style="margin-top:14px">${tabela(bairros, "Bairro", "bai-" + id)}</div>
     <div class="cab"><h3>Escolas</h3></div>
-    <div class="grid2"><div class="card"><h4>Cada escola: % do Fred × % do Wanderley <small>tamanho = eleitores</small></h4><canvas id="g-disp-${id}" height="320"></canvas></div>
+    <div class="grid2"><div class="card"><h4>Cada escola: % do Fred × % do Wanderley <small>tamanho = eleitores · toque para ver no mapa</small></h4><canvas id="g-disp-${id}" height="320"></canvas></div>
       <div class="card"><h4>As 15 escolas com mais votos dos dois juntos</h4><canvas id="g-esc-${id}" height="320"></canvas></div></div>
     <div class="grid2" style="margin-top:14px"><div class="card"><h4><span class="cw">Wanderley</span> · escolas com mais votos</h4>${rank(escs, "w", 15)}</div><div class="card"><h4><span class="cf">Fred</span> · escolas com mais votos</h4>${rank(escs, "f", 15)}</div></div>
     <div class="card" style="margin-top:14px">${tabela(escs, "Escola", "esc-" + id, true)}</div>`;
   // gráficos
   if (osm) {
     grafico(`g-reg-${id}`, {type: "bar", data: {labels: regs.map(r => r.nome), datasets: [{label: "Wanderley", data: regs.map(r => r.wp * 100), backgroundColor: COR.w, borderRadius: 5}, {label: "Fred", data: regs.map(r => r.fp * 100), backgroundColor: COR.f, borderRadius: 5}]},
-      options: {indexAxis: "y", plugins: {tooltip: {callbacks: {label: c => `${c.dataset.label}: ${dec(c.raw, 2)}%`}}}, scales: {x: {grid: grade, title: {display: true, text: "% dos válidos"}}, y: {grid: {display: false}}}}});
+      options: {indexAxis: "y", plugins: {tooltip: {callbacks: {label: c => `${c.dataset.label}: ${dec(c.raw, 2)}%`}}}, scales: {x: {grid: grade, title: {display: true, text: "% dos válidos"}}, y: {grid: {display: false}}}}}, i => verNoMapa("regional", regs[i].chave, m));
     grafico(`g-regs-${id}`, {type: "bar", data: {labels: regs.map(r => r.nome), datasets: [{label: "Wanderley", data: regs.map(r => r.w / u.w * 100), backgroundColor: COR.w, borderRadius: 5}, {label: "Fred", data: regs.map(r => r.f / u.f * 100), backgroundColor: COR.f, borderRadius: 5}, {label: "Eleitores", data: regs.map(r => r.el / u.el * 100), backgroundColor: "rgba(248,233,202,.35)", borderRadius: 5}]},
-      options: {indexAxis: "y", plugins: {tooltip: {callbacks: {label: c => `${c.dataset.label}: ${dec(c.raw, 1)}% do total da cidade`}}}, scales: {x: {grid: grade, title: {display: true, text: "% do total na cidade"}}, y: {grid: {display: false}}}}});
+      options: {indexAxis: "y", plugins: {tooltip: {callbacks: {label: c => `${c.dataset.label}: ${dec(c.raw, 1)}% do total da cidade`}}}, scales: {x: {grid: grade, title: {display: true, text: "% do total na cidade"}}, y: {grid: {display: false}}}}}, i => verNoMapa("regional", regs[i].chave, m));
   }
   const mxE = Math.max(...escs.map(e => e.el));
   grafico(`g-disp-${id}`, {type: "bubble", data: {datasets: [{data: ws.map(e => ({x: e.fp * 100, y: e.wp * 100, r: 2 + 10 * Math.sqrt(e.el / mxE), nome: e.nome, b: e.bairro})), backgroundColor: ws.map(e => (e.rel > 0 ? "rgba(234,91,34,.55)" : "rgba(85,184,230,.55)")), borderColor: "rgba(248,233,202,.35)"}]},
-    options: {plugins: {legend: {display: false}, tooltip: {callbacks: {label: c => `${c.raw.nome} (${c.raw.b}): Fred ${dec(c.raw.x, 2)}% · Wanderley ${dec(c.raw.y, 2)}%`}}}, scales: {x: {grid: grade, title: {display: true, text: "% do Fred (federal)"}}, y: {grid: grade, title: {display: true, text: "% do Wanderley (estadual)"}}}}});
+    options: {plugins: {legend: {display: false}, tooltip: {callbacks: {label: c => `${c.raw.nome} (${c.raw.b}): Fred ${dec(c.raw.x, 2)}% · Wanderley ${dec(c.raw.y, 2)}%`}}}, scales: {x: {grid: grade, title: {display: true, text: "% do Fred (federal)"}}, y: {grid: grade, title: {display: true, text: "% do Wanderley (estadual)"}}}}}, i => verNoMapa("escola", ws[i].chave, m));
   const top15 = escs.slice().sort((a, b) => (b.w + b.f) - (a.w + a.f)).slice(0, 15);
   grafico(`g-esc-${id}`, {type: "bar", data: {labels: top15.map(e => e.nome.length > 30 ? e.nome.slice(0, 29) + "…" : e.nome), datasets: [{label: "Wanderley", data: top15.map(e => e.w), backgroundColor: COR.w, borderRadius: 4}, {label: "Fred", data: top15.map(e => e.f), backgroundColor: COR.f, borderRadius: 4}]},
-    options: {indexAxis: "y", plugins: {tooltip: {callbacks: {label: c => `${c.dataset.label}: ${int(c.raw)} votos`}}}, scales: {x: {stacked: true, grid: grade}, y: {stacked: true, grid: {display: false}, ticks: {font: {size: 11}}}}}});
-  mapaCidade(m);
+    options: {indexAxis: "y", plugins: {tooltip: {callbacks: {label: c => `${c.dataset.label}: ${int(c.raw)} votos`}}}, scales: {x: {stacked: true, grid: grade}, y: {stacked: true, grid: {display: false}, ticks: {font: {size: 11}}}}}}, i => verNoMapa("escola", top15[i].chave, m));
+  animar(alvo);
+  return mapaCidade(m);
 }
 
 /* ranking e tabela genéricos */
@@ -205,6 +241,7 @@ async function mapaCidade(m) {
   const ibge = MUN(m).ibge, osm = E.B.cidadesOSM.includes(m);
   if (osm && !E.osm[ibge]) E.osm[ibge] = await fetch(`dados/osm/${ibge}.json`).then(r => r.json());
   if (E.mapas[id]) { E.mapas[id].remove(); }
+  E.reg[id] = new Map();
   const mapa = L.map(el, {scrollWheelZoom: false, preferCanvas: true, zoomSnap: .25});
   L.tileLayer("https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", {attribution: "Esri · OpenStreetMap · TSE", maxZoom: 17}).addTo(mapa);
   mapa.on("click focus", () => mapa.scrollWheelZoom.enable());
@@ -215,13 +252,13 @@ async function mapaCidade(m) {
   if (osm && camada !== "escola") {
     const fc = camada === "regional" ? E.osm[ibge].regionais : E.osm[ibge].bairros;
     L.geoJSON(fc, {style: f => { const u = porNome.get(f.properties.nome); return {color: "#141c21", weight: camada === "regional" ? 1.6 : .7, fillOpacity: u ? .9 : .25, fillColor: cor(u, modo, q)}; },
-      onEachFeature: (f, l) => { const u = porNome.get(f.properties.nome); l.bindTooltip(u ? dica(u, camada === "regional" ? "regional" : "bairro") : `<b>${esc(f.properties.nome)}</b><br><small>sem local de votação</small>`, {sticky: true}); if (u) l.on("click", ev => popover(u, ev.originalEvent)); }}).addTo(grupo);
+      onEachFeature: (f, l) => { const u = porNome.get(f.properties.nome); l.bindTooltip(u ? dica(u, camada === "regional" ? "regional" : "bairro") : `<b>${esc(f.properties.nome)}</b><br><small>sem local de votação</small>`, {sticky: true}); if (u) { l.on("click", ev => popover(u, ev.originalEvent)); registrar(id, `${camada}|${u.chave}`, l); } }}).addTo(grupo);
   }
   if (osm && camada !== "escola") L.geoJSON(E.osm[ibge].regionais, {style: {color: "rgba(248,233,202,.55)", weight: 1.4, fill: false}, interactive: false}).addTo(grupo);
   if (camada === "escola" || !osm) {
     const mx = Math.max(...ctx.escs.map(e => e.el));
     for (const u of ctx.escs) { const e = u.escolas[0]; if (e.lat == null) continue;
-      L.circleMarker([e.lat, e.lng], {radius: 3 + 9 * Math.sqrt(e.el / mx), color: "#141c21", weight: .8, fillOpacity: .92, fillColor: cor(u, modo, q)}).bindTooltip(dica(u, "escola · " + e.bairro), {sticky: true}).on("click", ev => popover(u, ev.originalEvent)).addTo(grupo); }
+      const mk = L.circleMarker([e.lat, e.lng], {radius: 3 + 9 * Math.sqrt(e.el / mx), color: "#141c21", weight: .8, fillOpacity: .92, fillColor: cor(u, modo, q)}).bindTooltip(dica(u, "escola · " + e.bairro), {sticky: true}).on("click", ev => popover(u, ev.originalEvent)).addTo(grupo); registrar(id, `escola|${u.chave}`, mk); }
   }
   const b = grupo.getBounds(); if (b.isValid()) mapa.fitBounds(b, {padding: [10, 10]});
   new ResizeObserver(() => { mapa.invalidateSize(); }).observe(el);
@@ -240,6 +277,47 @@ document.addEventListener("click", e => {
   const d = e.target.closest("[data-modo] [data-v]"); if (d) { const m = d.parentElement.dataset.modo; E.modo[m] = d.dataset.v; $$(`[data-modo="${m}"] button`).forEach(b => b.setAttribute("aria-pressed", b === d)); if (m === "mg") mapaMG(); else mapaCidade(m); }
 });
 
+/* ---------------- destaque no mapa e "ver no mapa" */
+E.reg = {};   // mapa -> chave "tipo|chave" -> camadas
+function registrar(mapaId, chave, camada) { const m = E.reg[mapaId] || (E.reg[mapaId] = new Map()); if (!m.has(chave)) m.set(chave, []); m.get(chave).push(camada); }
+function destacar(chave, liga) {
+  for (const m of Object.values(E.reg)) for (const ly of m.get(chave) || []) {
+    if (liga) { if (!ly._orig) ly._orig = {color: ly.options.color, weight: ly.options.weight, fillOpacity: ly.options.fillOpacity, raio: ly.getRadius?.()}; ly.setStyle({color: "#ffffff", weight: ly.getRadius ? 3 : 3.2, fillOpacity: 1}); if (ly.getRadius) ly.setRadius(ly._orig.raio * 1.7); ly.bringToFront?.(); }
+    else if (ly._orig) { ly.setStyle({color: ly._orig.color, weight: ly._orig.weight, fillOpacity: ly._orig.fillOpacity}); if (ly.getRadius) ly.setRadius(ly._orig.raio); }
+  }
+}
+let hoverAtual = null;
+document.addEventListener("mouseover", e => { const p = e.target.closest("[data-pop]"); const k = p ? p.dataset.pop.split("|").slice(0, 2).join("|") : null; if (k === hoverAtual) return; if (hoverAtual) destacar(hoverAtual, false); hoverAtual = k; if (k) destacar(k, true); });
+function piscar(lys) { let n = 0; const t = setInterval(() => { lys.forEach(l => l.setStyle({color: n % 2 ? "#ffffff" : COR.creme, weight: n % 2 ? 4 : 2})); if (++n > 7) clearInterval(t); }, 220); }
+async function verNoMapa(tipo, chave, mun) {
+  $("#pop").hidden = true;
+  const chaveR = `${tipo}|${chave}`, osm = E.B.cidadesOSM.includes(mun);
+  let mapaId;
+  if (["bairro", "regional", "escola"].includes(tipo) && osm) {
+    E.camada[mun] = tipo; mapaId = "c" + mun;
+    if (mun === BH) { if (E.aba !== "bh") irAba("bh", false); else await mapaCidade(mun); } else { E.cidade = mun; irAba("cidades", false); }
+    await new Promise(r => setTimeout(r, 50)); await E.desenhando;
+    $$(`[data-camada="${mun}"] button`).forEach(b => b.setAttribute("aria-pressed", b.dataset.v === tipo));
+  } else {
+    const nv = NIV[tipo] ? tipo : "mun";
+    if (E.aba !== "minas" || E.nivelMG !== nv) { E.nivelMG = nv; irAba("minas", false); }
+    await new Promise(r => setTimeout(r, 50)); await E.desenhando; mapaId = "mg";
+  }
+  const mapa = E.mapas[mapaId], el = $("#mapa-" + mapaId); if (!mapa || !el) return;
+  const ctl = $("#controles"), fixa = getComputedStyle(ctl).position === "sticky" ? ctl.offsetHeight : 0;
+  scrollTo({top: el.getBoundingClientRect().top + scrollY - fixa - 16, behavior: "smooth"});
+  const lys = E.reg[mapaId]?.get(chaveR) || [];
+  if (!lys.length && tipo === "escola") {   // escola de cidade sem contornos: marca no mapa de Minas
+    const e0 = ESC[+chave]; if (e0?.lat == null) return;
+    L.circleMarker([e0.lat, e0.lng], {radius: 9, color: "#fff", weight: 3, fillColor: COR.w, fillOpacity: 1}).bindTooltip(dica(acharUnidade("escola", chave, mun), "escola"), {permanent: true, direction: "top"}).addTo(mapa);
+    mapa.flyTo([e0.lat, e0.lng], 14, {duration: 1}); return;
+  }
+  if (!lys.length) return;
+  if (lys[0].getLatLng && lys.length === 1) mapa.flyTo(lys[0].getLatLng(), Math.max(mapa.getZoom(), 15), {duration: 1}); else mapa.flyToBounds(L.featureGroup(lys).getBounds().pad(.4), {duration: 1, maxZoom: 15});
+  setTimeout(() => { lys.forEach(l => l.bringToFront?.()); lys[0].openTooltip?.(); piscar(lys); }, 1050);
+}
+document.addEventListener("click", e => { const v = e.target.closest("[data-ver]"); if (v) { e.preventDefault(); const [t, c, m] = v.dataset.ver.split("|"); verNoMapa(t, c, m); } });
+
 /* ---------------- Minas Gerais */
 function minas() {
   const nv = E.nivelMG, l = nivelMG(nv), mg = soma(ESC);
@@ -254,17 +332,19 @@ function minas() {
     <div class="grid2" style="margin-top:14px"><div class="card"><h4>As 20 cidades com mais votos dos dois</h4><canvas id="g-topcid" height="420"></canvas></div><div class="card"><h4>Macrorregiões: % dos válidos</h4><canvas id="g-macro" height="420"></canvas></div></div>
     <div class="card" style="margin-top:14px">${tabela(l, NIV[nv][1], "mg-" + nv)}</div>`;
   grafico("g-topcid", {type: "bar", data: {labels: top.map(c => c.nome), datasets: [{label: "Wanderley", data: top.map(c => c.w), backgroundColor: COR.w, borderRadius: 4}, {label: "Fred", data: top.map(c => c.f), backgroundColor: COR.f, borderRadius: 4}]},
-    options: {indexAxis: "y", plugins: {tooltip: {callbacks: {label: c => `${c.dataset.label}: ${int(c.raw)} votos`}}}, scales: {x: {grid: grade, type: "logarithmic", title: {display: true, text: "votos (escala log)"}}, y: {grid: {display: false}}}}});
+    options: {indexAxis: "y", plugins: {tooltip: {callbacks: {label: c => `${c.dataset.label}: ${int(c.raw)} votos`}}}, scales: {x: {grid: grade, type: "logarithmic", title: {display: true, text: "votos (escala log)"}}, y: {grid: {display: false}}}}}, i => verNoMapa("mun", top[i].chave, top[i].chave));
   const me = nivelMG("me").slice().sort((a, b) => b.fp - a.fp);
   grafico("g-macro", {type: "bar", data: {labels: me.map(c => c.nome), datasets: [{label: "Wanderley", data: me.map(c => c.wp * 100), backgroundColor: COR.w, borderRadius: 4}, {label: "Fred", data: me.map(c => c.fp * 100), backgroundColor: COR.f, borderRadius: 4}]},
-    options: {indexAxis: "y", plugins: {tooltip: {callbacks: {label: c => `${c.dataset.label}: ${dec(c.raw, 2)}%`}}}, scales: {x: {grid: grade, title: {display: true, text: "% dos válidos"}}, y: {grid: {display: false}}}}});
-  mapaMG();
+    options: {indexAxis: "y", plugins: {tooltip: {callbacks: {label: c => `${c.dataset.label}: ${dec(c.raw, 2)}%`}}}, scales: {x: {grid: grade, title: {display: true, text: "% dos válidos"}}, y: {grid: {display: false}}}}}, i => verNoMapa("me", me[i].chave, ""));
+  animar($("#p-minas"));
+  E.desenhando = mapaMG(); return E.desenhando;
 }
 document.addEventListener("click", e => { const b = e.target.closest("#nivelMG [data-n]"); if (b) { E.nivelMG = b.dataset.n; minas(); } });
 async function mapaMG() {
   if (!E.geo) E.geo = await fetch("dados/mg.geojson").then(r => r.json());
   const el = $("#mapa-mg"); if (!el) return;
   if (E.mapas.mg) E.mapas.mg.remove();
+  E.reg.mg = new Map();
   const mapa = L.map(el, {scrollWheelZoom: false, preferCanvas: true, zoomSnap: .25}); E.mapas.mg = mapa;
   L.tileLayer("https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", {attribution: "Esri · IBGE · TSE", maxZoom: 14}).addTo(mapa);
   mapa.on("click focus", () => mapa.scrollWheelZoom.enable());
@@ -273,12 +353,12 @@ async function mapaMG() {
   const ibgeMun = new Map(Object.entries(E.B.municipios).map(([m, x]) => [x.ibge, m])), q = quebras(lm.map(u => u[modo]));
   const grupo = L.featureGroup().addTo(mapa);
   L.geoJSON(E.geo, {style: f => { const u = unidadeDe.get(ibgeMun.get(f.properties.ibge)); return {color: nvMapa === "mun" ? "#141c21" : "rgba(20,28,33,.4)", weight: nvMapa === "mun" ? .4 : .2, fillOpacity: nv === "zona" ? .25 : .9, fillColor: cor(u, modo, q)}; },
-    onEachFeature: (f, ly) => { const u = unidadeDe.get(ibgeMun.get(f.properties.ibge)); if (!u) return; ly.bindTooltip(dica(u, NIV[nvMapa][1].toLowerCase()), {sticky: true}); ly.on("click", ev => popover(u, ev.originalEvent)); }}).addTo(grupo);
+    onEachFeature: (f, ly) => { const u = unidadeDe.get(ibgeMun.get(f.properties.ibge)); if (!u) return; ly.bindTooltip(dica(u, NIV[nvMapa][1].toLowerCase()), {sticky: true}); ly.on("click", ev => popover(u, ev.originalEvent)); registrar("mg", `${u.tipo}|${u.chave}`, ly); }}).addTo(grupo);
   if (nvMapa !== "mun") L.polyline(bordasRegiao(nvMapa, ib => NIV[nvMapa][2]({mun: ibgeMun.get(ib)})), {color: "#f8e9ca", weight: 1.4, opacity: .85, interactive: false}).addTo(grupo);
   if (nv === "zona") {
     const qz = quebras(l.map(u => u[modo])), mx = Math.max(...l.map(u => u.el));
     for (const u of l) { const c = u.escolas.filter(e => e.lat != null); if (!c.length) continue; const t = c.reduce((a, e) => a + e.el, 0), lat = c.reduce((a, e) => a + e.lat * e.el, 0) / t, lng = c.reduce((a, e) => a + e.lng * e.el, 0) / t;
-      L.circleMarker([lat, lng], {radius: 4 + 12 * Math.sqrt(u.el / mx), color: "#141c21", weight: 1, fillOpacity: .92, fillColor: cor(u, modo, qz)}).bindTooltip(dica(u, "zona"), {sticky: true}).on("click", ev => popover(u, ev.originalEvent)).addTo(grupo); }
+      const mk = L.circleMarker([lat, lng], {radius: 4 + 12 * Math.sqrt(u.el / mx), color: "#141c21", weight: 1, fillOpacity: .92, fillColor: cor(u, modo, qz)}).bindTooltip(dica(u, "zona"), {sticky: true}).on("click", ev => popover(u, ev.originalEvent)).addTo(grupo); registrar("mg", `zona|${u.chave}`, mk); }
   }
   mapa.fitBounds(grupo.getBounds()); new ResizeObserver(() => mapa.invalidateSize()).observe(el);
   $("#leg-mg").innerHTML = legenda(modo, nv === "zona" ? quebras(l.map(u => u[modo])) : q);
@@ -316,6 +396,7 @@ function escolas() {
     <div class="grid3"><div class="card"><h4><span class="cw">Wanderley</span> · mais votos</h4>${rank(todas, "w", 12)}</div><div class="card"><h4><span class="cf">Fred</span> · mais votos</h4>${rank(todas, "f", 12)}</div>
       <div class="card"><h4>Onde a dobradinha foi forte <small>os dois com 20+ votos, maior % somado</small></h4><ol class="rank">${ambos.map(u => `<li><button data-pop="escola|${u.chave}|${u.escolas[0].mun}"><span>${esc(u.nome)}</span><b>${pct(u.wp, 1)} · ${pct(u.fp, 1)}</b></button></li>`).join("")}</ol></div></div>
     <div class="card" style="margin-top:14px">${tabela(todas, "Escola", "todas")}</div>`;
+  animar($("#p-escolas"));
 }
 
 /* ---------------- análises */
@@ -345,6 +426,7 @@ function analises() {
     <div class="grid2" style="margin-top:14px"><div class="card"><h4>BH · votos do Wanderley a cada 100 do Fred, por regional</h4><canvas id="g-raz" height="300"></canvas></div>
       <div class="card"><h4>BH · as escolas em 4 grupos <small>acima ou abaixo da mediana de cada um</small></h4><canvas id="g-quad" height="300"></canvas>
       <p class="nota">${int(quad[0])} escolas fortes para os dois · ${int(quad[1])} só Wanderley · ${int(quad[2])} só Fred · ${int(quad[3])} fracas para os dois.</p></div></div>`;
+  animar($("#p-analises"));
   grafico("g-lorenz", {type: "line", data: {datasets: [{label: "Wanderley", data: cw.pts, borderColor: COR.w, pointRadius: 0, borderWidth: 3}, {label: "Fred", data: cf.pts, borderColor: COR.f, pointRadius: 0, borderWidth: 3}]},
     options: {parsing: false, scales: {x: {type: "logarithmic", grid: grade, title: {display: true, text: "número de escolas (escala log)"}}, y: {grid: grade, max: 100, title: {display: true, text: "% acumulado dos votos"}}}, plugins: {tooltip: {callbacks: {label: c => `${c.dataset.label}: ${dec(c.raw.y, 0)}% dos votos em ${int(c.raw.x)} escolas`}}}}});
   grafico("g-dep", {type: "bar", data: {labels: ["Wanderley", "Fred"], datasets: gs.map(([n, u], i) => ({label: n, data: [u.w / mg.w * 100, u.f / mg.f * 100], backgroundColor: ["#f8e9ca", "#b9a98a", "#5d6b73"][i], borderRadius: 4}))},
@@ -370,9 +452,11 @@ function popover(u, ev) {
   const onde = u.tipo === "escola" ? `${e0.bairro} · ${MUN(e0.mun).nome}` : u.tipo === "bairro" || u.tipo === "regional" ? MUN(e0.mun).nome : "";
   const top = u.escolas.length > 1 ? u.escolas.slice().sort((a, b) => (b.w + b.f) - (a.w + a.f)).slice(0, 6) : [];
   const pop = $("#pop");
+  const verK = `${u.tipo}|${u.chave}|${e0.mun}`;
   pop.innerHTML = `<button class="fechar" aria-label="Fechar">×</button><span class="selo-t">${tipoN}</span><h3>${esc(u.nome)}</h3><p class="nota">${esc(onde)}${onde ? " · " : ""}${int(u.el)} eleitores${u.n > 1 ? ` · ${int(u.n)} locais de votação` : ""}</p>
     <div class="pp"><div class="w"><small>Wanderley</small><b class="cw">${int(u.w)}</b><small>${pct(u.wp, 2)} dos válidos · ${pct(u.ws, 2)} do total dele</small></div><div class="f"><small>Fred</small><b class="cf">${int(u.f)}</b><small>${pct(u.fp, 2)} dos válidos · ${pct(u.fs, 2)} do total dele</small></div></div>
     <p class="nota">Wanderley a cada 100 do Fred: <b style="color:#f7f2e8">${dec(u.razao, 0)}</b> · Fred em 2022: <b style="color:#f7f2e8">${int(u.f22)}</b> (${pp(u.dF, 2)}) · PRD estadual: ${pct(u.wprd, 0)} do Wanderley · PRD federal: ${pct(u.fprd, 0)} do Fred</p>
+    <button class="btn prim ver" data-ver="${esc(verK)}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg> Ver no mapa</button>
     ${top.length ? `<h4 style="margin-top:10px">Escolas com mais votos dos dois</h4><ol class="rank">${top.map(e => `<li><button data-pop="escola|${e.id}|${e.mun}"><span>${esc(e.nome)}</span><b><span class="cw">${int(e.w)}</span> · <span class="cf">${int(e.f)}</span></b></button></li>`).join("")}</ol>` : ""}`;
   pop.hidden = false;
   const x = ev?.clientX ?? innerWidth / 2, y = ev?.clientY ?? innerHeight / 3, w = pop.offsetWidth, h = pop.offsetHeight;
@@ -408,7 +492,7 @@ function escolher(x) {
   $("#acBusca").hidden = true; $("#qBusca").value = ""; $("#qBusca").blur();
   const m = x.u.escolas[0].mun;
   if (x.t === "Cidade" && E.B.cidadesOSM.includes(m)) { if (m === BH) irAba("bh"); else { E.cidade = m; irAba("cidades"); } return; }
-  popover(x.u, null);
+  verNoMapa(x.u.tipo, x.u.chave, m);
 }
 
 /* ---------------- início */
