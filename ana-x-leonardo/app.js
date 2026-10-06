@@ -203,7 +203,8 @@ function cidade_(m, alvo) {
   const regs = osm ? agrupar(lista, e => e.regional, null, "regional").sort((a, b) => b.el - a.el) : [];
   const bairros = agrupar(lista, e => e.bairro, null, "bairro");
   const escs = lista.map(e => Object.assign(derivar({...e, n: 1}), {nome: e.nome, tipo: "escola", chave: e.id, escolas: [e]}));
-  E.ctx = E.ctx || {}; E.ctx[m] = {regs, bairros, escs, u};
+  const zonasC = agrupar(lista, e => String(e.zona), k => "Zona " + k, "zona").sort((a, b) => +a.chave - +b.chave);
+  E.ctx = E.ctx || {}; E.ctx[m] = {regs, bairros, escs, u, zonas: zonasC};
   const ws = escs.filter(e => e.va && e.vb), r = correl(ws.map(e => e.ap), ws.map(e => e.bp), ws.map(e => e.el));
   const topA = escs.slice().sort((a, b) => b.a - a.a)[0], topB = escs.slice().sort((a, b) => b.b - a.b)[0];
   const regA = regs.slice().sort((a, b) => b.ap - a.ap)[0], regB = regs.slice().sort((a, b) => b.bp - a.bp)[0];
@@ -224,7 +225,7 @@ function cidade_(m, alvo) {
       <div class="card"><h4>Bairros com mais votos casados <small>soma das escolas</small></h4>${rankC(bairros, 15)}</div></div>
     ${osm ? `<div class="card" style="margin-top:14px"><h4>Regionais · votos casados e sintonia</h4><canvas id="g-cas-${id}" height="260"></canvas></div>` : ""}
     <div class="cab"><h3>Mapa${osm ? " de bairros, regionais e escolas" : " das escolas"}</h3></div>
-    <div class="linha"><span class="rot">Mostrar</span><div class="seg" data-camada="${m}">${(osm ? [["bairro", "Bairros"], ["regional", "Regionais"], ["escola", "Escolas"]] : [["escola", "Escolas"]]).map(([k, n]) => `<button data-v="${k}" aria-pressed="${(E.camada[m] || (osm ? "bairro" : "escola")) === k}">${n}</button>`).join("")}</div></div>
+    <div class="linha"><span class="rot">Mostrar</span><div class="seg" data-camada="${m}">${(osm ? [["bairro", "Bairros"], ["regional", "Regionais"], ["escola", "Escolas"], ["zona", "Zonas"], ["secao", "Seções"]] : [["escola", "Escolas"], ["zona", "Zonas"], ["secao", "Seções"]]).map(([k, n]) => `<button data-v="${k}" aria-pressed="${(E.camada[m] || (osm ? "bairro" : "escola")) === k}">${n}</button>`).join("")}</div></div>
     <div class="linha"><span class="rot">Pintar por</span><div class="seg" data-modo="${m}">${MODOS.map(([k, n]) => `<button data-v="${k}" aria-pressed="${(E.modo[m] || "cas") === k}">${esc(n)}</button>`).join("")}</div></div>
     <div class="mapa-wrap"><div><div class="mapa" id="mapa-${id}"></div><div class="legenda" id="leg-${id}"></div></div><aside class="card lateral" id="lat-${id}"></aside></div>
     ${osm ? `<div class="cab"><h3>Por regional</h3></div>
@@ -293,23 +294,42 @@ async function mapaCidade(m) {
   mapa.on("click focus", () => mapa.scrollWheelZoom.enable());
   E.mapas[id] = mapa;
   const ctx = E.ctx[m], camada = E.camada[m] || (osm ? "bairro" : "escola"), modo = E.modo[m] || "cas";
-  const lista = camada === "regional" ? ctx.regs : camada === "bairro" ? ctx.bairros : ctx.escs, q = quebras(lista.map(u => u[modo]));
+  // seções: cada urna em volta da sua escola; os modos que dependem dos válidos usam os votos casados
+  const MS = ["cas", "sint", "mais", "a", "b", "razao"], modoS = MS.includes(modo) ? modo : "cas";
+  let secs = [];
+  if (camada === "secao") { await carregarSecoes(); if (!document.body.contains(el)) return; const ids = new Set(ctx.escs.map(x => +x.chave)); secs = E.SEC.filter(x => ids.has(x.i)).map(x => Object.assign(x, {mais: Math.log2((x.a + 1) / (x.b + 1)), razao: x.b ? x.a / x.b * 100 : null})); }
+  const lista = camada === "regional" ? ctx.regs : camada === "bairro" ? ctx.bairros : camada === "zona" ? ctx.zonas : camada === "secao" ? secs : ctx.escs, mq = camada === "secao" ? modoS : modo, q = camada === "secao" && modoS === "cas" ? [2, 5, 10, 20] : camada === "secao" && modoS === "sint" ? [.25, .5, .75, .9] : quebras(lista.map(u => u[mq]));
   const porNome = new Map(lista.map(u => [u.nome, u])), grupo = L.featureGroup().addTo(mapa);
-  if (osm && camada !== "escola") {
+  if (osm && (camada === "bairro" || camada === "regional")) {
     const fc = camada === "regional" ? E.osm[ibge].regionais : E.osm[ibge].bairros;
     L.geoJSON(fc, {style: f => { const u = porNome.get(f.properties.nome); return {color: BORDA_MAPA, weight: camada === "regional" ? 1.6 : .7, fillOpacity: u ? .9 : .25, fillColor: cor(u, modo, q)}; },
       onEachFeature: (f, l) => { const u = porNome.get(f.properties.nome); l.bindTooltip(u ? dica(u, camada === "regional" ? "regional" : "bairro") : `<b>${esc(f.properties.nome)}</b><br><small>sem local de votação</small>`, {sticky: true}); if (u) { l.on("click", ev => popover(u, ev.originalEvent)); registrar(id, `${camada}|${u.chave}`, l); } }}).addTo(grupo);
   }
   if (osm && camada !== "escola") L.geoJSON(E.osm[ibge].regionais, {style: {color: "rgba(223,233,239,.6)", weight: 1.4, fill: false}, interactive: false}).addTo(grupo);
-  if (camada === "escola" || !osm) {
+  if (camada === "zona") {
+    const mx = Math.max(...ctx.zonas.map(z => z.el));
+    for (const z of ctx.zonas) { const c = centro(z.escolas); if (!c) continue;
+      const mk = L.circleMarker(c, {radius: 7 + 16 * Math.sqrt(z.el / mx), color: "#ffffff", weight: 1.4, opacity: .8, fillOpacity: .88, fillColor: cor(z, modo, q)}).bindTooltip(dica(z, `zona · ${int(z.n)} locais`), {sticky: true}).on("click", ev => popover(z, ev.originalEvent)).addTo(grupo); registrar(id, `zona|${z.chave}`, mk);
+      L.tooltip({permanent: true, direction: "center", className: "rot-mapa", interactive: false}).setLatLng(c).setContent(z.chave).addTo(grupo); }
+  }
+  if (camada === "secao") {
+    E.secPal = modoS === "cas" || modoS === "sint";
+    const porEsc = new Map(); for (const x of secs) { if (!porEsc.has(x.i)) porEsc.set(x.i, []); porEsc.get(x.i).push(x); }
+    for (const [i, ls] of porEsc) { const e = ESC[i]; if (e.lat == null) continue; const k = ls.length, raio = .00022 * (1 + k / 10);
+      ls.sort((p, q2) => p.n - q2.n).forEach((x, j) => { const ang = 2 * Math.PI * j / k, lat = e.lat + raio * Math.sin(ang), lng = e.lng + raio * Math.cos(ang) / Math.cos(e.lat * Math.PI / 180);
+        L.circleMarker([lat, lng], {radius: 4.6, color: "rgba(255,255,255,.55)", weight: .7, fillOpacity: .95, fillColor: corSec(x, modoS, q)}).bindTooltip(`<b>Seção ${x.n} · Zona ${x.zona}</b><br><small style="color:${FAINT}">${esc(e.nome)}</small><br><span style="color:${COR.a}">■</span> ${NA}: <b>${int(x.a)}</b> · <span style="color:${COR.b}">■</span> ${NB}: <b>${int(x.b)}</b><br><span style="color:${COR.c}">■</span> Casados: <b>${int(x.cas)}</b> · sintonia ${pct(x.sint, 0)}`, {sticky: true})
+          .on("click", ev => popover(acharUnidade("escola", String(i), e.mun), ev.originalEvent)).addTo(grupo); }); }
+  }
+  if (camada === "escola") {
     const mx = Math.max(...ctx.escs.map(e => e.el));
     for (const u of ctx.escs) { const e = u.escolas[0]; if (e.lat == null) continue;
       const mk = L.circleMarker([e.lat, e.lng], {radius: 3 + 9 * Math.sqrt(e.el / mx), color: BORDA_MAPA, weight: .8, fillOpacity: .92, fillColor: cor(u, modo, q)}).bindTooltip(dica(u, "escola · " + e.bairro), {sticky: true}).on("click", ev => popover(u, ev.originalEvent)).addTo(grupo); registrar(id, `escola|${u.chave}`, mk); }
   }
   const b = grupo.getBounds(); if (b.isValid()) mapa.fitBounds(b, {padding: [10, 10]});
   new ResizeObserver(() => { mapa.invalidateSize(); }).observe(el);
-  $("#leg-" + id).innerHTML = legenda(modo, q);
-  const nomeC = {regional: "regionais", bairro: "bairros", escola: "escolas"}[camada], mn = MODOS.find(x => x[0] === modo)[1];
+  $("#leg-" + id).innerHTML = (camada === "secao" && (modoS === "cas" || modoS === "sint") ? [["#5b6b78", "nenhum casado"], ...SECPAL.map((c, i) => [c, modoS === "cas" ? ["1 a 2", "3 a 5", "6 a 10", "11 a 20", "mais de 20"][i] : ["até 25%", "25 a 50%", "50 a 75%", "75 a 90%", "acima de 90%"][i]])].map(([c, t]) => `<span><b style="background:${c}"></b>${t}</span>`).join("") : legenda(mq, q)) + (camada === "secao" ? `<span class="nota">(cada bolinha é uma seção, em volta da sua escola · aproxime o mapa${modoS !== modo ? " · nas seções este modo usa os votos casados" : ""})</span>` : camada === "zona" ? `<span class="nota">(cada círculo é uma zona eleitoral, no centro das suas escolas)</span>` : "");
+  if (camada === "secao") { const k = ["a", "b"].includes(modoS) ? modoS : "cas"; $("#lat-" + id).innerHTML = `<h4>Seções ${k === "cas" ? "com mais votos casados" : "com mais votos " + do_(k)} <small>${int(secs.length)} seções</small></h4><p class="nota">${NA} · ${NB} · <span class="cc">casados</span></p>${rankS(secs, k, 14)}`; return; }
+  const nomeC = {regional: "regionais", bairro: "bairros", escola: "escolas", zona: "zonas"}[camada], mn = MODOS.find(x => x[0] === modo)[1];
   const ordenada = lista.filter(u => u[modo] != null && isFinite(u[modo])).sort((a, b) => b[modo] - a[modo]);
   const maisA = lista.filter(u => u.a > u.b).sort((a, b) => (b.a - b.b) - (a.a - a.b)), maisB = lista.filter(u => u.b > u.a).sort((a, b) => (b.b - b.a) - (a.b - a.a));
   const itemD = u => `<li><button data-pop="${u.tipo}|${esc(u.chave)}|${m}"><span>${esc(u.nome)}</span><b><span class="ca">${int(u.a)}</span> · <span class="cb">${int(u.b)}</span></b></button></li>`;
@@ -368,7 +388,7 @@ document.addEventListener("click", e => { const v = e.target.closest("[data-ver]
 
 /* ---------------- Minas Gerais */
 function minas() {
-  const nv = E.nivelMG, l = nivelMG(nv), mg = soma(ESC);
+  const nv = E.nivelMG, l = nivelMG(nv === "secao" ? "mun" : nv), mg = soma(ESC);
   const fora = soma(ESC.filter(e => e.mun !== BH)), ri = soma(ESC.filter(e => MUN(e.mun)?.ri === "Belo Horizonte" && e.mun !== BH));
   const top = nivelMG("mun").slice().sort((a, b) => (b.a + b.b) - (a.a + a.b)).slice(0, 20);
   $("#p-minas").innerHTML = `<div class="cab"><h2>Minas Gerais</h2><p>Os dois em todo o estado: cidades, zonas eleitorais, macrorregiões, microrregiões e regiões do IBGE. Toque num lugar para ver os detalhes.</p></div>
@@ -376,11 +396,12 @@ function minas() {
       <div class="kpi"><b>${int(ri.a)} · ${int(ri.b)}</b><span>no resto da região de BH (${NA} · ${NB})</span></div><div class="kpi"><b>${int(nivelMG("mun").filter(c => c.a > 0).length)} · ${int(nivelMG("mun").filter(c => c.b > 0).length)}</b><span>cidades com voto (${NA} · ${NB})</span></div>
       <div class="kpi"><b class="cc">${int(mg.cas)}</b><span>votos casados nas escolas de Minas · sintonia de ${pct(mg.sint, 0)}</span></div></div>
     <div class="card" style="margin-bottom:14px"><h4>Cidades com mais votos casados <small>${NA} · ${NB} · casados · a bolinha mostra a sintonia</small></h4>${rankC(nivelMG("mun"), 20)}</div>
-    <div class="linha"><span class="rot">Ver por</span><div class="seg" id="nivelMG">${Object.entries(NIV).map(([k, v]) => `<button data-n="${k}" aria-pressed="${k === nv}">${v[0]}</button>`).join("")}</div></div>
+    <div class="linha"><span class="rot">Ver por</span><div class="seg" id="nivelMG">${Object.entries(NIV).map(([k, v]) => `<button data-n="${k}" aria-pressed="${k === nv}">${v[0]}</button>`).join("")}<button data-n="secao" aria-pressed="${nv === "secao"}">Seções (urnas)</button></div></div>
     <div class="linha"><span class="rot">Pintar por</span><div class="seg" data-modo="mg">${MODOS.map(([k, n]) => `<button data-v="${k}" aria-pressed="${(E.modo.mg || "cas") === k}">${esc(n)}</button>`).join("")}</div></div>
     <div class="mapa-wrap"><div><div class="mapa" id="mapa-mg"></div><div class="legenda" id="leg-mg"></div></div><aside class="card lateral" id="lat-mg"></aside></div>
     <div class="grid2" style="margin-top:14px"><div class="card"><h4>As 20 cidades com mais votos dos dois</h4><canvas id="g-topcid" height="420"></canvas></div><div class="card"><h4>Macrorregiões: % dos válidos</h4><canvas id="g-macro" height="420"></canvas></div></div>
-    <div class="card" style="margin-top:14px">${tabela(l, NIV[nv][1], "mg-" + nv)}</div>`;
+    <div class="card" style="margin-top:14px">${nv === "secao" ? `<div id="mgSecTab"><p class="nota">Carregando as seções…</p></div>` : tabela(l, NIV[nv][1], "mg-" + nv)}</div>`;
+  if (nv === "secao") carregarSecoes().then(S => { const b = $("#mgSecTab"); if (b) b.innerHTML = secTabela("mg-sec", S, "Todas as seções de Minas"); });
   grafico("g-topcid", {type: "bar", data: {labels: top.map(c => c.nome), datasets: dsAB(k => top.map(c => c[k]))},
     options: {indexAxis: "y", plugins: {tooltip: {callbacks: {label: c => `${c.dataset.label}: ${int(c.raw)} votos`}}}, scales: {x: {grid: grade, type: "logarithmic", title: {display: true, text: "votos (escala log)"}}, y: {grid: {display: false}}}}}, i => verNoMapa("mun", top[i].chave, top[i].chave));
   const me = nivelMG("me").slice().sort((a, b) => b.bp - a.bp);
@@ -398,6 +419,7 @@ async function mapaMG() {
   const mapa = L.map(el, {scrollWheelZoom: false, preferCanvas: true, zoomSnap: .25}); E.mapas.mg = mapa;
   L.tileLayer(TILES, {attribution: "Esri · IBGE · TSE", maxZoom: 14}).addTo(mapa);
   mapa.on("click focus", () => mapa.scrollWheelZoom.enable());
+  if (E.nivelMG === "secao") return mapaMGSecoes(mapa, el);
   const nv = E.nivelMG, modo = E.modo.mg || "cas", l = nivelMG(nv), nvMapa = nv === "zona" ? "mun" : nv, lm = nivelMG(nvMapa);
   const unidadeDe = new Map(); for (const u of lm) for (const e of u.escolas) unidadeDe.set(e.mun, u);
   const ibgeMun = new Map(Object.entries(E.B.municipios).map(([m, x]) => [x.ibge, m])), q = quebras(lm.map(u => u[modo]));
@@ -422,6 +444,23 @@ async function mapaMG() {
     : `<h4>${esc(mn)} <small>${NIV[nv][0].toLowerCase()}</small></h4><ol class="rank">${ord.slice(0, 25).map(item).join("")}</ol>`;
 }
 
+async function mapaMGSecoes(mapa, el) {
+  const SEC = await carregarSecoes(); if (!document.body.contains(el)) return;
+  const modo = E.modo.mg || "cas", MS = ["cas", "sint", "mais", "a", "b", "razao"], modoS = MS.includes(modo) ? modo : "cas";
+  for (const x of SEC) { x.mais = Math.log2((x.a + 1) / (x.b + 1)); x.razao = x.b ? x.a / x.b * 100 : null; }
+  const q = modoS === "cas" ? [2, 5, 10, 20] : modoS === "sint" ? [.25, .5, .75, .9] : quebras(SEC.map(x => x[modoS])), grupo = L.featureGroup().addTo(mapa);
+  L.geoJSON(E.geo, {style: {color: "rgba(223,233,239,.16)", weight: .4, fillColor: "#132636", fillOpacity: .5}, interactive: false}).addTo(grupo);
+  const porEsc = new Map(); for (const x of SEC) { if (!porEsc.has(x.i)) porEsc.set(x.i, []); porEsc.get(x.i).push(x); }
+  for (const [i, ls] of porEsc) { const e = ESC[i]; if (e.lat == null) continue; const k = ls.length, raio = .00022 * (1 + k / 10);
+    ls.forEach((x, j) => { const ang = 2 * Math.PI * j / k;
+      L.circleMarker([e.lat + raio * Math.sin(ang), e.lng + raio * Math.cos(ang) / Math.cos(e.lat * Math.PI / 180)], {radius: 2.6, color: "rgba(255,255,255,.35)", weight: .4, fillOpacity: .95, fillColor: corSec(x, modoS, q)})
+        .bindTooltip(`<b>Seção ${x.n} · Zona ${x.zona}</b><br><small style="color:${FAINT}">${esc(e.nome)} · ${esc(MUN(e.mun).nome)}</small><br><span style="color:${COR.a}">■</span> ${NA}: <b>${int(x.a)}</b> · <span style="color:${COR.b}">■</span> ${NB}: <b>${int(x.b)}</b><br><span style="color:${COR.c}">■</span> Casados: <b>${int(x.cas)}</b> · sintonia ${pct(x.sint, 0)}`, {sticky: true})
+        .on("click", ev => popover(acharUnidade("escola", String(i), e.mun), ev.originalEvent)).addTo(grupo); }); }
+  mapa.fitBounds(grupo.getBounds()); new ResizeObserver(() => mapa.invalidateSize()).observe(el);
+  $("#leg-mg").innerHTML = (modoS === "cas" || modoS === "sint" ? [["#5b6b78", "nenhum casado"], ...SECPAL.map((c, i) => [c, modoS === "cas" ? ["1 a 2", "3 a 5", "6 a 10", "11 a 20", "mais de 20"][i] : ["até 25%", "25 a 50%", "50 a 75%", "75 a 90%", "acima de 90%"][i]])].map(([c, t]) => `<span><b style="background:${c}"></b>${t}</span>`).join("") : legenda(modoS, q)) + `<span class="nota">(cada bolinha é uma seção, em volta da sua escola · aproxime o mapa${modoS !== modo ? " · nas seções este modo usa os votos casados" : ""})</span>`;
+  const k = ["a", "b"].includes(modoS) ? modoS : "cas";
+  $("#lat-mg").innerHTML = `<h4>Seções ${k === "cas" ? "com mais votos casados" : "com mais votos " + do_(k)} <small>${int(SEC.length)} seções</small></h4><p class="nota">${NA} · ${NB} · <span class="cc">casados</span></p>${rankS(SEC, k, 16)}`;
+}
 // contornos das regiões: trechos de divisa entre cidades de regiões diferentes (e a divisa do estado)
 const BORDAS = {};
 function bordasRegiao(nivel, chaveDoIbge) {
@@ -457,7 +496,7 @@ async function carregarSecoes() {
   if (!E.SEC) { E.SEC = []; S.forEach((l, i) => { const e = ESC[i]; for (const [n, a, b] of l) E.SEC.push({i, n, a, b, cas: Math.min(a, b), sint: Math.max(a, b) ? Math.min(a, b) / Math.max(a, b) : null, zona: String(e.zona), mun: e.mun, escola: e.nome, bairro: e.bairro}); }); }
   return E.SEC;
 }
-const nomeZona = z => E.B.zonas[z]?.nome || "Zona " + z;
+const nomeZona = z => (E.B.zonas[z]?.nome || "").replace(/^Zona \d+\s*·\s*/, "") || "Minas Gerais";   // o cadastro já vem como "Zona 28 · Belo Horizonte"
 const rotSec = x => `Seção ${x.n} · Zona ${x.zona}`;
 const rankS = (l, k, n) => `<ol class="rank">${l.filter(x => x[k] > 0).sort((p, q) => q[k] - p[k] || q.cas - p.cas).slice(0, n).map(x => `<li><button data-pop="escola|${x.i}|${x.mun}"><span>${esc(rotSec(x))}<small class="sub">${esc(x.escola)} · ${esc(MUN(x.mun).nome)}</small>${k === "cas" ? `<i class="sint" style="--s:${Math.round((x.sint || 0) * 100)}%"></i>` : ""}</span><b>${k === "cas" ? `<span class="ca">${int(x.a)}</span> · <span class="cb">${int(x.b)}</span> · <span class="cc">${int(x.cas)}</span>` : `<span class="${k === "a" ? "ca" : "cb"}">${int(x[k])}</span>`}</b></button></li>`).join("") || "<li class='nota'>nenhuma</li>"}</ol>`;
 const SCOLS = [["n", "Seção", x => x.n], ["zona", "Zona", x => x.zona], ["escola", "Local de votação", x => esc(x.escola)], ["bairro", "Bairro", x => esc(x.bairro)], ["cid", "Cidade", x => esc(MUN(x.mun).nome)], ["a", () => NA, x => int(x.a), "ta"], ["b", () => NB, x => int(x.b), "tb"], ["cas", "Casados", x => int(x.cas), "tc"], ["sint", "Sintonia", x => pct(x.sint, 0), "tc"]];
@@ -478,38 +517,169 @@ document.addEventListener("click", e => {
   const c = e.target.closest("[data-scsv]"); if (c) { const t = E.stabs[c.dataset.scsv];
     const linhas = [["Seção", "Zona", "Local de votação", "Bairro", "Cidade", NA, NB, "Votos casados", "Sintonia %"].join(";")].concat(t.l.map(x => [x.n, x.zona, x.escola, x.bairro, MUN(x.mun).nome, x.a, x.b, x.cas, dec((x.sint || 0) * 100, 1)].map(v => `"${String(v).replace(/"/g, '""')}"`).join(";")));
     Object.assign(document.createElement("a"), {href: URL.createObjectURL(new Blob(["\ufeff" + linhas.join("\n")], {type: "text/csv"})), download: `${CF.slug}-${c.dataset.scsv}.csv`}).click(); return; }
-  const z = e.target.closest("[data-zona]"); if (z) { E.zona = z.dataset.zona; zonaDetalhe(true); }
+  const z = e.target.closest("[data-zona]"); if (z) abrirZona(z.dataset.zona);
 });
 document.addEventListener("input", e => { const f = e.target.closest("[data-sfiltro]"); if (f) { E.filtro[f.dataset.sfiltro] = f.value; reSecTabela(f.dataset.sfiltro); } });
-document.addEventListener("change", e => { if (e.target.id === "zonaSel") { E.zona = e.target.value; zonaDetalhe(true); } });
+document.addEventListener("change", e => { if (e.target.id === "zonaSel") { E.zona = e.target.value; zonaDetalhe(false); } });
+function abrirZona(z) { E.zona = z; E.sub = "juntas"; subSZ(); setTimeout(() => rolarAte($("#subSZ")), 60); }
 
+const SUBS = [["zonas", "Zonas eleitorais"], ["secoes", "Seções (urnas)"], ["juntas", "Zona e suas seções"]];
+const opt = (v, t, sel) => `<option value="${esc(v)}"${v === sel ? " selected" : ""}>${esc(t)}</option>`;
 async function secoesZonas() {
   const p = $("#p-secoes");
   if (!E.SEC) p.innerHTML = `<div class="cab"><h2>Seções e zonas</h2><p>Carregando as seções eleitorais…</p></div>`;
   const SEC = await carregarSecoes(), zonas = nivelMG("zona").filter(z => z.a + z.b > 0);
-  const dois = SEC.filter(x => x.a > 0 && x.b > 0), soA = SEC.filter(x => x.a > 0 && !x.b).length, soB = SEC.filter(x => x.b > 0 && !x.a).length, cas = SEC.reduce((t, x) => t + x.cas, 0);
-  const faixas = [["até 25%", 0, .25], ["25 a 50%", .25, .5], ["50 a 75%", .5, .75], ["75 a 100%", .75, 1.01]].map(([n, a, b]) => [n, dois.filter(x => x.sint >= a && x.sint < b).length]);
+  for (const z of zonas) z.cids = z.cids || [...new Set(z.escolas.map(e => MUN(e.mun).nome))];
+  const dois = SEC.filter(x => x.a > 0 && x.b > 0).length, cas = SEC.reduce((t, x) => t + x.cas, 0);
+  E.sub = E.sub || "zonas";
   if (!E.zona || !zonas.some(z => z.chave === E.zona)) E.zona = zonas.slice().sort((a, b) => b.cas - a.cas)[0].chave;
-  p.innerHTML = `<div class="cab"><h2>Seções e zonas</h2><p>A urna é o menor pedaço que o TSE publica. Aqui estão as ${int(SEC.length)} seções eleitorais onde pelo menos um dos dois teve voto, e as ${int(zonas.length)} zonas eleitorais de Minas. Toque numa seção para abrir a escola dela.</p></div>
-    <div class="kpis"><div class="kpi"><b class="cc">${int(cas)}</b><span>votos casados somando todas as urnas</span></div><div class="kpi"><b>${int(dois.length)}</b><span>seções com voto dos dois (${pct(dois.length / SEC.length, 0)})</span></div>
-      <div class="kpi"><b class="ca">${int(soA)}</b><span>seções só com ${NA}</span></div><div class="kpi"><b class="cb">${int(soB)}</b><span>seções só com ${NB}</span></div></div>
-    <div class="cab"><h3>Seções eleitorais</h3></div>
-    <div class="grid3"><div class="card"><h4><span class="ca">${NA}</span> · mais votos</h4>${rankS(SEC, "a", 12)}</div><div class="card"><h4><span class="cb">${NB}</span> · mais votos</h4>${rankS(SEC, "b", 12)}</div>
-      <div class="card"><h4><span class="cc">Mais votos casados</span> <small>${NA} · ${NB} · casados</small></h4>${rankS(SEC, "cas", 12)}</div></div>
-    <div class="grid2" style="margin-top:14px"><div class="card"><h4>Seções com voto dos dois, por sintonia <small>quanto a votação dos dois se parece em cada urna</small></h4><canvas id="g-sint" height="240"></canvas></div>
-      <div class="card"><h4>Zonas com mais votos casados <small>toque para ver as seções da zona</small></h4><ol class="rank">${zonas.slice().sort((a, b) => b.cas - a.cas).slice(0, 10).map(z => `<li><button data-zona="${esc(z.chave)}"><span>Zona ${esc(z.chave)} · ${esc(nomeZona(z.chave))}<i class="sint" style="--s:${Math.round((z.sint || 0) * 100)}%"></i></span><b><span class="ca">${int(z.a)}</span> · <span class="cb">${int(z.b)}</span> · <span class="cc">${int(z.cas)}</span></b></button></li>`).join("")}</ol></div></div>
-    <div class="card" style="margin-top:14px">${secTabela("sec-todas", SEC, "Todas as seções")}</div>
-    <div class="cab"><h3>Zonas eleitorais</h3></div>
-    <div class="grid3"><div class="card"><h4><span class="ca">${NA}</span> · mais votos</h4>${rank(zonas, "a", 12)}</div><div class="card"><h4><span class="cb">${NB}</span> · mais votos</h4>${rank(zonas, "b", 12)}</div>
-      <div class="card"><h4><span class="cc">Mais votos casados</span> <small>${NA} · ${NB} · casados</small></h4>${rankC(zonas, 12)}</div></div>
-    <div class="card" style="margin-top:14px">${tabela(zonas, "Zona", "zonas-t")}</div>
-    <div class="cab"><h3>Uma zona por dentro</h3><p>Escolha a zona para ver as escolas no mapa e todas as seções dela.</p></div>
-    <div class="linha"><span class="rot">Zona</span><select id="zonaSel">${zonas.slice().sort((a, b) => +a.chave - +b.chave).map(z => `<option value="${esc(z.chave)}"${z.chave === E.zona ? " selected" : ""}>Zona ${esc(z.chave)} · ${esc(nomeZona(z.chave))} · ${int(z.cas)} casados</option>`).join("")}</select></div>
-    <div id="zonaCorpo"></div>`;
-  grafico("g-sint", {type: "bar", data: {labels: faixas.map(f => f[0]), datasets: [{label: "Seções", data: faixas.map(f => f[1]), backgroundColor: rampa(COR.c).slice(1), borderRadius: 6}]},
-    options: {plugins: {legend: {display: false}, tooltip: {callbacks: {label: c => `${int(c.raw)} seções`}}}, scales: {y: {grid: grade, title: {display: true, text: "seções"}}, x: {grid: {display: false}, title: {display: true, text: "sintonia na urna"}}}}});
+  p.innerHTML = `<div class="cab"><h2>Seções e zonas</h2><p>A zona eleitoral reúne várias escolas; cada escola tem várias seções (urnas), o menor pedaço que o TSE publica. Veja as zonas, as seções ou uma zona com todas as suas seções.</p></div>
+    <div class="kpis"><div class="kpi"><b>${int(zonas.length)}</b><span>zonas eleitorais com voto</span></div><div class="kpi"><b>${int(SEC.length)}</b><span>seções com voto de pelo menos um dos dois</span></div>
+      <div class="kpi"><b>${int(dois)}</b><span>seções com voto dos dois (${pct(dois / SEC.length, 0)})</span></div><div class="kpi"><b class="cc">${int(cas)}</b><span>votos casados somando todas as urnas</span></div></div>
+    <div class="sub-abas" id="subSZ" role="tablist">${SUBS.map(([k, n]) => `<button data-sub="${k}" aria-pressed="${k === E.sub}">${n}</button>`).join("")}</div>
+    <div id="sz-corpo"></div>`;
   animar(p);
+  return subSZ();
+}
+function subSZ() {
+  $$("#subSZ [data-sub]").forEach(b => b.setAttribute("aria-pressed", b.dataset.sub === E.sub));
+  return E.sub === "zonas" ? vistaZonas() : E.sub === "secoes" ? vistaSecoes() : vistaJuntas();
+}
+const rolarAte = el => { const ctl = $("#controles"), fixa = getComputedStyle(ctl).position === "sticky" ? ctl.offsetHeight : 0; scrollTo({top: el.getBoundingClientRect().top + scrollY - fixa - 12, behavior: "smooth"}); };
+
+/* vista 1: zonas eleitorais */
+function vistaZonas() {
+  const f = E.zf = E.zf || {ri: "", mun: "", q: ""}, todas = nivelMG("zona").filter(z => z.a + z.b > 0);
+  const ris = [...new Set(Object.values(E.B.municipios).map(m => m.ri).filter(Boolean))].sort();
+  const cids = [...new Set(todas.flatMap(z => z.escolas.map(e => e.mun)))].sort((a, b) => MUN(a).nome.localeCompare(MUN(b).nome));
+  $("#sz-corpo").innerHTML = `<div class="filtros"><label><span>Região</span><select data-zf="ri">${opt("", "Todas as regiões", f.ri)}${ris.map(x => opt(x, "Região de " + x, f.ri)).join("")}</select></label>
+      <label><span>Cidade</span><select data-zf="mun">${opt("", "Todas as cidades", f.mun)}${cids.map(m => opt(m, MUN(m).nome, f.mun)).join("")}</select></label>
+      <label class="q"><span>Buscar</span><input type="search" data-zf="q" value="${esc(f.q)}" placeholder="Número da zona ou cidade…"></label>
+      <button class="btn" data-zlimpar>Limpar filtros</button></div>
+    <div id="zf-corpo"></div>`;
+  return zonasCorpo();
+}
+function zonasCorpo() {
+  const f = E.zf, q = semAc(f.q), todas = nivelMG("zona").filter(z => z.a + z.b > 0);
+  const l = todas.filter(z => (!f.ri || z.escolas.some(e => MUN(e.mun)?.ri === f.ri)) && (!f.mun || z.escolas.some(e => e.mun === f.mun)) && (!q || semAc(`zona ${z.chave} ${z.chave} ${z.cids.join(" ")}`).includes(q)));
+  const u = soma(l.flatMap(z => z.escolas));
+  $("#zf-corpo").innerHTML = !l.length ? `<p class="nota" style="margin:18px 0">Nenhuma zona com esse filtro.</p>` : `
+    <p class="resumo-f"><b>${int(l.length)}</b> ${l.length === 1 ? "zona" : "zonas"}${l.length < todas.length ? ` de ${int(todas.length)}` : ""} · <span class="ca">${NA} ${int(u.a)}</span> · <span class="cb">${NB} ${int(u.b)}</span> · <span class="cc">${int(u.cas)} casados</span> · sintonia de ${pct(u.sint, 0)}</p>
+    <div class="mapa-wrap"><div><div class="mapa" id="mapa-zonas"></div><div class="legenda" id="leg-zonas"></div></div><aside class="card lateral"><h4>Mais votos casados <small>toque para abrir a zona com as seções</small></h4><ol class="rank">${l.slice().sort((a, b) => b.cas - a.cas).slice(0, 12).map(z => `<li><button data-zona="${esc(z.chave)}"><span>Zona ${esc(z.chave)}<small class="sub">${esc(z.cids.slice(0, 3).join(", "))}${z.cids.length > 3 ? ` e mais ${z.cids.length - 3}` : ""}</small><i class="sint" style="--s:${Math.round((z.sint || 0) * 100)}%"></i></span><b><span class="ca">${int(z.a)}</span> · <span class="cb">${int(z.b)}</span> · <span class="cc">${int(z.cas)}</span></b></button></li>`).join("")}</ol></aside></div>
+    <div class="grid3" style="margin-top:14px"><div class="card"><h4><span class="ca">${NA}</span> · zonas com mais votos</h4>${rank(l, "a", 10)}</div><div class="card"><h4><span class="cb">${NB}</span> · zonas com mais votos</h4>${rank(l, "b", 10)}</div>
+      <div class="card"><h4><span class="cc">Zonas com mais votos casados</span></h4>${rankC(l, 10)}</div></div>
+    <div class="card" style="margin-top:14px">${tabela(l, "Zona", "zonas-t")}</div>`;
+  animar($("#zf-corpo"));
+  return l.length ? mapaZonas(l) : null;
+}
+
+/* vista 2: seções (urnas) */
+function vistaSecoes() {
+  const f = E.sf = E.sf || {zona: "", mun: "", tipo: "todas", min: 0}, zonas = nivelMG("zona").filter(z => z.a + z.b > 0).sort((a, b) => +a.chave - +b.chave);
+  const cids = [...new Set(E.SEC.map(x => x.mun))].sort((a, b) => MUN(a).nome.localeCompare(MUN(b).nome));
+  $("#sz-corpo").innerHTML = `<div class="filtros"><label><span>Zona</span><select data-sf="zona">${opt("", "Todas as zonas", f.zona)}${zonas.map(z => opt(z.chave, `Zona ${z.chave} · ${z.cids.slice(0, 2).join(", ")}${z.cids.length > 2 ? "…" : ""}`, f.zona)).join("")}</select></label>
+      <label><span>Cidade</span><select data-sf="mun">${opt("", "Todas as cidades", f.mun)}${cids.map(m => opt(m, MUN(m).nome, f.mun)).join("")}</select></label>
+      <label><span>Mostrar</span><span class="seg mini">${[["todas", "Todas"], ["dois", "Os dois votados"], ["a", "Só " + NA], ["b", "Só " + NB]].map(([k, n]) => `<button data-stipo="${k}" aria-pressed="${f.tipo === k}">${esc(n)}</button>`).join("")}</span></label>
+      <label class="num"><span>Casados no mínimo</span><input type="number" min="0" step="1" data-sf="min" value="${f.min || 0}"></label>
+      <button class="btn" data-slimpar>Limpar filtros</button></div>
+    <div id="sf-corpo"></div>`;
+  return secoesCorpo();
+}
+function secoesFiltradas() {
+  const f = E.sf;
+  return E.SEC.filter(x => (!f.zona || x.zona === f.zona) && (!f.mun || x.mun === f.mun) && (f.tipo === "todas" || (f.tipo === "dois" ? x.a > 0 && x.b > 0 : f.tipo === "a" ? x.a > 0 && !x.b : x.b > 0 && !x.a)) && x.cas >= (+f.min || 0));
+}
+function secoesCorpo() {
+  const l = secoesFiltradas(), dois = l.filter(x => x.a > 0 && x.b > 0), soma3 = k => l.reduce((t, x) => t + x[k], 0), A = soma3("a"), Bv = soma3("b"), cas = soma3("cas");
+  const faixas = [["até 25%", 0, .25], ["25 a 50%", .25, .5], ["50 a 75%", .5, .75], ["75 a 100%", .75, 1.01]].map(([n, a, b]) => [n, dois.filter(x => x.sint >= a && x.sint < b).length]);
+  $("#sf-corpo").innerHTML = !l.length ? `<p class="nota" style="margin:18px 0">Nenhuma seção com esse filtro.</p>` : `
+    <p class="resumo-f"><b>${int(l.length)}</b> seções · <span class="ca">${NA} ${int(A)}</span> · <span class="cb">${NB} ${int(Bv)}</span> · <span class="cc">${int(cas)} casados</span> · ${int(dois.length)} com voto dos dois</p>
+    <div class="grid3"><div class="card"><h4><span class="ca">${NA}</span> · seções com mais votos</h4>${rankS(l, "a", 10)}</div><div class="card"><h4><span class="cb">${NB}</span> · seções com mais votos</h4>${rankS(l, "b", 10)}</div>
+      <div class="card"><h4><span class="cc">Seções com mais votos casados</span></h4>${rankS(l, "cas", 10)}</div></div>
+    <div class="grid2" style="margin-top:14px"><div class="card"><h4>Seções com voto dos dois, por sintonia <small>quanto a votação dos dois se parece em cada urna</small></h4><canvas id="g-sint" height="220"></canvas></div>
+      <div class="card"><h4>Como ler</h4><p class="nota" style="font-size:13.5px;line-height:1.5">Cada linha é uma urna. <b class="cc">Casados</b> é o menor dos dois votos naquela urna: o máximo de eleitores que podem ter votado ${do_("a")} e ${do_("b")} juntos. <b>Sintonia</b> é casados ÷ o maior dos dois: 100% quando os dois tiveram a mesma votação na urna. Toque numa linha para abrir a escola com todas as suas seções.</p></div></div>
+    <div class="card" style="margin-top:14px">${secTabela("sec-todas", l, "Seções")}</div>`;
+  grafico("g-sint", {type: "bar", data: {labels: faixas.map(x => x[0]), datasets: [{label: "Seções", data: faixas.map(x => x[1]), backgroundColor: rampa(COR.c).slice(1), borderRadius: 6}]},
+    options: {plugins: {legend: {display: false}, tooltip: {callbacks: {label: c => `${int(c.raw)} seções`}}}, scales: {y: {grid: grade, title: {display: true, text: "seções"}}, x: {grid: {display: false}, title: {display: true, text: "sintonia na urna"}}}}});
+  animar($("#sf-corpo"));
+}
+
+/* vista 3: uma zona com as escolas e as seções de cada escola */
+function vistaJuntas() {
+  const zonas = nivelMG("zona").filter(z => z.a + z.b > 0).sort((a, b) => +a.chave - +b.chave);
+  $("#sz-corpo").innerHTML = `<div class="filtros"><label class="q"><span>Zona</span><select id="zonaSel">${zonas.map(z => opt(z.chave, `Zona ${z.chave} · ${z.cids.slice(0, 3).join(", ")}${z.cids.length > 3 ? ` e mais ${z.cids.length - 3}` : ""} · ${int(z.cas)} casados`, E.zona)).join("")}</select></label>
+      <button class="btn" data-zprox="-1">← Zona anterior</button><button class="btn" data-zprox="1">Próxima zona →</button></div>
+    <div id="zonaCorpo"></div>`;
   return zonaDetalhe(false);
+}
+document.addEventListener("click", e => {
+  const sb = e.target.closest("[data-sub]"); if (sb) { E.sub = sb.dataset.sub; subSZ(); return; }
+  const st = e.target.closest("[data-stipo]"); if (st) { E.sf.tipo = st.dataset.stipo; $$("[data-stipo]").forEach(b => b.setAttribute("aria-pressed", b === st)); secoesCorpo(); return; }
+  if (e.target.closest("[data-zlimpar]")) { E.zf = null; vistaZonas(); return; }
+  if (e.target.closest("[data-slimpar]")) { E.sf = null; vistaSecoes(); return; }
+  const zp = e.target.closest("[data-zprox]"); if (zp) { const l = nivelMG("zona").filter(z => z.a + z.b > 0).sort((a, b) => +a.chave - +b.chave), i = l.findIndex(z => z.chave === E.zona); E.zona = l[(i + +zp.dataset.zprox + l.length) % l.length].chave; zonaDetalhe(false); }
+});
+const aoFiltrar = e => {
+  const z = e.target.closest("[data-zf]"); if (z) { E.zf[z.dataset.zf] = z.value; if (z.dataset.zf === "q" && e.type === "change") return; zonasCorpo(); return; }
+  const sf = e.target.closest("[data-sf]"); if (sf) { E.sf[sf.dataset.sf] = sf.value; if (sf.dataset.sf === "zona" && sf.value) { const z = E.SEC.find(x => x.zona === sf.value); } secoesCorpo(); }
+};
+document.addEventListener("input", e => { if (e.target.matches("input[data-zf], input[data-sf]")) aoFiltrar(e); });
+document.addEventListener("change", e => { if (e.target.matches("select[data-zf], select[data-sf]")) aoFiltrar(e); });
+// seções no mapa: paleta clara (as bolinhas são pequenas e os valores por urna são baixos)
+const SECPAL = ["#3f7d1c", "#62a815", "#88cc00", "#b8ec3a", "#e6ff8a"];
+const corSec = (x, modo, q) => (modo === "cas" || modo === "sint") ? (!x.cas ? "#5b6b78" : SECPAL[q.filter(t => x[modo] > t).length]) : cor(x, modo, q);
+const centro = l => { const c = l.filter(e => e.lat != null); if (!c.length) return null; const t = c.reduce((a, e) => a + (e.el || 1), 0); return [c.reduce((a, e) => a + e.lat * (e.el || 1), 0) / t, c.reduce((a, e) => a + e.lng * (e.el || 1), 0) / t]; };
+async function mapaZonas(zonas) {
+  const todas = nivelMG("zona").filter(z => z.a + z.b > 0), dentro = new Set(zonas.map(z => z.chave));
+  if (!E.geo) E.geo = await fetch("dados/mg.geojson").then(r => r.json());
+  const el = $("#mapa-zonas"); if (!el) return;
+  if (E.mapas.zonas) E.mapas.zonas.remove();
+  E.reg.zonas = new Map();
+  const mapa = L.map(el, {scrollWheelZoom: false, preferCanvas: true, zoomSnap: .25}); E.mapas.zonas = mapa;
+  L.tileLayer(TILES, {attribution: "Esri · IBGE · TSE", maxZoom: 14}).addTo(mapa);
+  mapa.on("click focus", () => mapa.scrollWheelZoom.enable());
+  const g = L.featureGroup().addTo(mapa);
+  L.geoJSON(E.geo, {style: {color: "rgba(223,233,239,.18)", weight: .5, fillColor: "#132636", fillOpacity: .55}, interactive: false}).addTo(g);
+  const q = quebras(zonas.map(z => z.cas)), mx = Math.max(...todas.map(z => z.el)), gf = L.featureGroup().addTo(mapa); E.zonaMk = {};
+  if (zonas.length < todas.length) for (const z of todas) { if (dentro.has(z.chave)) continue; const c = centro(z.escolas); if (c) L.circleMarker(c, {radius: 2 + 6 * Math.sqrt(z.el / mx), color: "rgba(223,233,239,.25)", weight: .6, fillColor: "#24384a", fillOpacity: .6, interactive: false}).addTo(g); }
+  for (const z of zonas.slice().sort((a, b) => b.el - a.el)) { const c = centro(z.escolas); if (!c) continue;
+    const mk = L.circleMarker(c, {radius: 3 + 11 * Math.sqrt(z.el / mx), color: z.chave === E.zona ? "#ffffff" : "rgba(10,22,32,.9)", weight: z.chave === E.zona ? 2.5 : .8, fillOpacity: .9, fillColor: cor(z, "cas", q)})
+      .bindTooltip(`<b>Zona ${esc(z.chave)}</b> · ${esc(nomeZona(z.chave))}<br><span style="color:${COR.a}">■</span> ${NA}: <b>${int(z.a)}</b> · <span style="color:${COR.b}">■</span> ${NB}: <b>${int(z.b)}</b><br><span style="color:${COR.c}">■</span> Votos casados: <b>${int(z.cas)}</b> · sintonia ${pct(z.sint, 0)}`, {sticky: true})
+      .on("click", () => abrirZona(z.chave)).addTo(gf);
+    registrar("zonas", `zona|${z.chave}`, mk); E.zonaMk = E.zonaMk || {}; E.zonaMk[z.chave] = mk; }
+  mapa.fitBounds((zonas.length < todas.length ? gf : g).getBounds().pad(zonas.length < todas.length ? .25 : 0), {padding: [6, 6], maxZoom: 12}); new ResizeObserver(() => mapa.invalidateSize()).observe(el);
+  $("#leg-zonas").innerHTML = legenda("cas", q) + `<span class="nota">(cada bolinha é uma zona · toque para abrir com as seções)</span>`;
+}
+async function desenharZona(z, u, escs) {
+  if (!E.geo) E.geo = await fetch("dados/mg.geojson").then(r => r.json());
+  const muns = [...new Set(u.escolas.map(e => e.mun))], ibges = new Set(muns.map(m => MUN(m).ibge));
+  const osm = muns.filter(m => E.B.cidadesOSM.includes(m));
+  for (const m of osm) { const ib = MUN(m).ibge; if (!E.osm[ib]) E.osm[ib] = await fetch(`dados/osm/${ib}.json`).then(r => r.json()); }
+  const el = $("#mapa-zona"); if (!el || E.zona !== z) return;
+  if (E.mapas.zona) E.mapas.zona.remove();
+  E.reg.zona = new Map();
+  const mapa = L.map(el, {scrollWheelZoom: false, preferCanvas: true, zoomSnap: .25}); E.mapas.zona = mapa;
+  L.tileLayer(TILES, {attribution: "Esri · OpenStreetMap · IBGE · TSE", maxZoom: 17}).addTo(mapa);
+  mapa.on("click focus", () => mapa.scrollWheelZoom.enable());
+  const q = quebras(escs.map(x => x.cas)), mx = Math.max(...escs.map(x => x.el)), area = L.featureGroup().addTo(mapa), pts = L.featureGroup().addTo(mapa);
+  // municípios da zona (as cidades grandes têm várias zonas: aí entram os bairros da zona)
+  const soCidade = muns.length === 1 && osm.length === 1;
+  if (!soCidade) {
+    const munU = new Map(agrupar(u.escolas, e => e.mun, k => MUN(k).nome, "mun").map(x => [MUN(x.chave).ibge, x])), qm = quebras([...munU.values()].map(x => x.cas));
+    L.geoJSON({type: "FeatureCollection", features: E.geo.features.filter(f => ibges.has(f.properties.ibge))}, {style: f => ({color: "rgba(223,233,239,.85)", weight: 1.6, fillColor: cor(munU.get(f.properties.ibge), "cas", qm), fillOpacity: .45}),
+      onEachFeature: (f, ly) => { const x = munU.get(f.properties.ibge); if (!x) return; ly.bindTooltip(dica(x, "cidade · parte na zona"), {sticky: true}); if (muns.length <= 14) L.tooltip({permanent: true, direction: "center", className: "rot-mapa"}).setLatLng(ly.getBounds().getCenter()).setContent(esc(x.nome)).addTo(mapa); ly.on("click", ev => popover(x, ev.originalEvent)); }}).addTo(area);
+  }
+  for (const m of osm) {
+    const lm = u.escolas.filter(e => e.mun === m), bairros = agrupar(lm, e => e.bairro, null, "bairro"), pb = new Map(bairros.map(x => [x.nome, x])), qb = quebras(bairros.map(x => x.cas)), ib = MUN(m).ibge;
+    L.geoJSON({type: "FeatureCollection", features: E.osm[ib].bairros.features.filter(f => pb.has(f.properties.nome))}, {style: f => ({color: "rgba(223,233,239,.55)", weight: .8, fillColor: cor(pb.get(f.properties.nome), "cas", qb), fillOpacity: .55}),
+      onEachFeature: (f, ly) => { const x = pb.get(f.properties.nome); ly.bindTooltip(dica(x, "bairro"), {sticky: true}); ly.on("click", ev => popover(x, ev.originalEvent)); }}).addTo(area);
+    L.geoJSON(E.osm[ib].regionais, {style: {color: "rgba(223,233,239,.35)", weight: 1.2, fill: false}, interactive: false}).addTo(mapa);
+  }
+  for (const x of escs) { const e = x.escolas[0]; if (e.lat == null) continue;
+    const mk = L.circleMarker([e.lat, e.lng], {radius: 4 + 9 * Math.sqrt(e.el / mx), color: "#ffffff", weight: 1.2, opacity: .85, fillOpacity: .95, fillColor: cor(x, "cas", q)}).bindTooltip(dica(x, "escola · " + e.bairro), {sticky: true}).on("click", ev => popover(x, ev.originalEvent)).addTo(pts); registrar("zona", `escola|${x.chave}`, mk); }
+  const b = (soCidade ? pts : area.getLayers().length ? area : pts).getBounds(); if (b.isValid()) mapa.fitBounds(b, {padding: [16, 16], maxZoom: 15});
+  new ResizeObserver(() => mapa.invalidateSize()).observe(el);
+  $("#leg-zona").innerHTML = legenda("cas", q) + `<span class="nota">(${soCidade || osm.length ? "bairros e escolas da zona" : "municípios e escolas da zona"}, pelos votos casados · borda branca = escola)</span>`;
 }
 function zonaDetalhe(rolar) {
   const z = E.zona, u = nivelMG("zona").find(x => x.chave === z), l = E.SEC.filter(x => x.zona === z), box = $("#zonaCorpo"); if (!box || !u) return;
@@ -520,20 +690,16 @@ function zonaDetalhe(rolar) {
       <div class="kpi"><b class="ca">${int(u.a)}</b><span>votos ${do_("a")} · ${pct(u.ap, 2)} dos válidos</span></div><div class="kpi"><b class="cb">${int(u.b)}</b><span>votos ${do_("b")} · ${pct(u.bp, 2)} dos válidos</span></div>
       <div class="kpi"><b class="cc">${int(u.cas)}</b><span>votos casados · sintonia de ${pct(u.sint, 0)}</span></div></div>
     <div class="mapa-wrap"><div><div class="mapa" id="mapa-zona"></div><div class="legenda" id="leg-zona"></div></div><aside class="card lateral"><h4>Escolas da zona com mais votos casados</h4>${rankC(escs, 12)}</aside></div>
-    <div class="card" style="margin-top:14px">${secTabela("sec-zona", l, `Seções da zona ${z}`)}</div>`;
+    <div class="cab"><h3>Escolas e suas seções</h3><p>Cada escola da zona com as urnas dela. Toque na escola para abrir ou fechar a lista.</p></div>
+    <div class="esc-secoes">${escs.slice().sort((p, q) => q.cas - p.cas || (q.a + q.b) - (p.a + p.b)).map((x, k) => { const ls = l.filter(s => s.i === +x.chave).sort((p, q) => p.n - q.n), mxs = Math.max(1, ...ls.map(s => Math.max(s.a, s.b)));
+      return `<details${k < 3 ? " open" : ""}><summary><span><b>${esc(x.nome)}</b><small class="sub">${esc(x.escolas[0].bairro)} · ${esc(MUN(x.escolas[0].mun).nome)} · ${int(ls.length)} seções</small></span><b><span class="ca">${int(x.a)}</span> · <span class="cb">${int(x.b)}</span> · <span class="cc">${int(x.cas)}</span></b></summary>
+        <div class="sec-lista">${ls.map(s => `<div class="sec"><span class="sn">Seção ${s.n}</span><span class="sb"><i class="ba" style="width:${s.a / mxs * 100}%"></i><i class="bb" style="width:${s.b / mxs * 100}%"></i></span><b><span class="ca">${int(s.a)}</span> · <span class="cb">${int(s.b)}</span> · <span class="cc">${int(s.cas)}</span></b></div>`).join("") || "<p class='nota'>sem votos dos dois</p>"}</div></details>`; }).join("")}</div>
+    <div class="card" style="margin-top:14px">${secTabela("sec-zona", l, `Todas as seções da zona ${z}`)}</div>`;
   animar(box);
-  if (E.mapas.zona) E.mapas.zona.remove();
-  E.reg.zona = new Map();
-  const el = $("#mapa-zona"), mapa = L.map(el, {scrollWheelZoom: false, preferCanvas: true, zoomSnap: .25}); E.mapas.zona = mapa;
-  L.tileLayer(TILES, {attribution: "Esri · OpenStreetMap · TSE", maxZoom: 17}).addTo(mapa);
-  mapa.on("click focus", () => mapa.scrollWheelZoom.enable());
-  const q = quebras(escs.map(x => x.cas)), mx = Math.max(...escs.map(x => x.el)), g = L.featureGroup().addTo(mapa);
-  for (const x of escs) { const e = x.escolas[0]; if (e.lat == null) continue;
-    const mk = L.circleMarker([e.lat, e.lng], {radius: 4 + 10 * Math.sqrt(e.el / mx), color: BORDA_MAPA, weight: .8, fillOpacity: .92, fillColor: cor(x, "cas", q)}).bindTooltip(dica(x, "escola · " + e.bairro), {sticky: true}).on("click", ev => popover(x, ev.originalEvent)).addTo(g); registrar("zona", `escola|${x.chave}`, mk); }
-  const b = g.getBounds(); if (b.isValid()) mapa.fitBounds(b, {padding: [16, 16], maxZoom: 15});
-  new ResizeObserver(() => mapa.invalidateSize()).observe(el);
-  $("#leg-zona").innerHTML = legenda("cas", q);
-  if (rolar) { const ctl = $("#controles"), fixa = getComputedStyle(ctl).position === "sticky" ? ctl.offsetHeight : 0; scrollTo({top: box.getBoundingClientRect().top + scrollY - fixa - 60, behavior: "smooth"}); }
+  for (const [k, mk] of Object.entries(E.zonaMk || {})) mk.setStyle(k === z ? {color: "#ffffff", weight: 2.5} : {color: "rgba(10,22,32,.9)", weight: .8});
+  E.zonaMk?.[z]?.bringToFront();
+  desenharZona(z, u, escs);
+  if (rolar) rolarAte(box);
 }
 
 /* ---------------- análises */
