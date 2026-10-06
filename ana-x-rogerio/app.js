@@ -1,8 +1,9 @@
 /* Comparação de dois candidatos (um estadual "a" e um federal "b") nas Eleições 2026 em Minas Gerais.
    Página genérica: nomes, cargos, cores e textos vêm de dados/base.json → cfg.
    Unidade básica: local de votação (escola); a página soma para bairro, regional, cidade, zona e regiões.
-   Convergência: em cada escola, "votos casados" = o menor dos dois (o máximo de eleitores que podem ter votado nos dois,
-   já que o voto é secreto); "sintonia" = casados ÷ o maior dos dois (100% = mesma votação no mesmo lugar). */
+   Convergência: em cada seção eleitoral (urna), "votos casados" = o menor dos dois (o máximo de eleitores daquela urna
+   que podem ter votado nos dois, já que o voto é secreto), somado por escola, bairro, cidade e região;
+   "sintonia" = casados ÷ o maior dos dois (100% = mesma votação no mesmo lugar). As seções de cada escola: dados/secoes.json. */
 "use strict";
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -113,7 +114,7 @@ const fmt = (modo, x) => modo === "sint" ? pct(x, 0) : modo === "ap" || modo ===
 function legenda(modo, q) {
   if (modo === "mais") return [`${NB} com o dobro ou mais`, `${NB} teve mais votos`, "praticamente empatados", `${NA} teve mais votos`, `${NA} com o dobro ou mais`].map((t, i) => `<span><b style="background:${DIVREL[i]}"></b>${t}</span>`).join("") + `<span class="nota">(votos ${do_("a")} para ${CA.cargoNome.toLowerCase().replace(/^deputad[oa] /, "")} × votos ${do_("b")} para ${CB.cargoNome.toLowerCase().replace(/^deputad[oa] /, "")} no mesmo lugar)</span>`;
   if (modo === "rel") return [`${NB} bem mais forte`, `${NB} mais forte`, "equilibrado", `${NA} mais forte`, `${NA} bem mais forte`].map((t, i) => `<span><b style="background:${DIVREL[i]}"></b>${t}</span>`).join("") + `<span class="nota">(comparando o peso de cada lugar no total de cada um)</span>`;
-  if (modo === "cas" || modo === "sint") return rampaDe(modo).map((c, i) => `<span><b style="background:${c}"></b>${i === 0 ? "até " + fmt(modo, q[0]) : i === 4 ? "acima de " + fmt(modo, q[3]) : fmt(modo, q[i - 1]) + " a " + fmt(modo, q[i])}</span>`).join("") + `<span class="nota">${modo === "cas" ? "(votos casados: em cada escola, os votos que os dois tiveram juntos, o menor dos dois)" : "(sintonia: 100% = os dois com a mesma votação no mesmo lugar)"}</span>`;
+  if (modo === "cas" || modo === "sint") return rampaDe(modo).map((c, i) => `<span><b style="background:${c}"></b>${i === 0 ? "até " + fmt(modo, q[0]) : i === 4 ? "acima de " + fmt(modo, q[3]) : fmt(modo, q[i - 1]) + " a " + fmt(modo, q[i])}</span>`).join("") + `<span class="nota">${modo === "cas" ? "(votos casados: em cada urna, o menor dos dois, somado no lugar)" : "(sintonia: 100% = os dois com a mesma votação no mesmo lugar)"}</span>`;
   if (modo === "d22") return ["caiu mais de 1 p.p.", "caiu", "estável", "subiu", "subiu mais de 1 p.p."].map((t, i) => `<span><b style="background:${DIVD[i]}"></b>${t}</span>`).join("");
   return rampaDe(modo).map((c, i) => `<span><b style="background:${c}"></b>${i === 0 ? "até " + fmt(modo, q[0]) : i === 4 ? "acima de " + fmt(modo, q[3]) : fmt(modo, q[i - 1]) + " a " + fmt(modo, q[i])}</span>`).join("");
 }
@@ -217,7 +218,7 @@ function cidade_(m, alvo) {
       <div class="kpi"><b>${dec(r, 2)}</b><span>correlação entre os dois nas escolas (−1 a +1)</span></div>
     </div>
     <p class="insight">${osm && regA ? `Regional mais forte: <b class="ca">${esc(regA.nome)}</b> para ${o_("a")} (${pct(regA.ap, 2)}) e <b class="cb">${esc(regB.nome)}</b> para ${o_("b")} (${pct(regB.bp, 2)}). ` : ""}${bairA ? `Bairro mais forte: <b class="ca">${esc(bairA.nome)}</b> (${pct(bairA.ap, 2)}) e <b class="cb">${esc(bairB?.nome)}</b> (${pct(bairB?.bp, 2)}). ` : ""}Escola com mais votos: <b class="ca">${esc(topA.nome)}</b> (${int(topA.a)}) e <b class="cb">${esc(topB.nome)}</b> (${int(topB.b)}). ${Math.abs(r) < .2 ? "Os dois votam em lugares diferentes da cidade: a força de um quase não acompanha a do outro." : r > 0 ? "Onde um é forte, o outro tende a ser forte também: a dobradinha anda junta." : "Onde um é forte, o outro tende a ser mais fraco."}</p>
-    <div class="cab"><h3>Onde a dobradinha casou</h3><p>Escola por escola, quantos votos cada um teve e quanto casou: o menor dos dois é o máximo de eleitores que podem ter votado nos dois juntos. Quanto maior, mais o trabalho em equipe rendeu no mesmo lugar.</p></div>
+    <div class="cab"><h3>Onde a dobradinha casou</h3><p>Escola por escola, quantos votos cada um teve e quanto casou, contado urna por urna: em cada seção eleitoral, o menor dos dois é o máximo de eleitores que podem ter votado nos dois juntos. Toque numa escola para ver seção por seção. Quanto maior, mais o trabalho em equipe rendeu no mesmo lugar.</p></div>
     <div class="grid2"><div class="card"><h4>Escolas com mais votos casados <small>${NA} · ${NB} · casados</small></h4>${rankC(escs, 15)}</div>
       <div class="card"><h4>Bairros com mais votos casados <small>soma das escolas</small></h4>${rankC(bairros, 15)}</div></div>
     ${osm ? `<div class="card" style="margin-top:14px"><h4>Regionais · votos casados e sintonia</h4><canvas id="g-cas-${id}" height="260"></canvas></div>` : ""}
@@ -492,6 +493,15 @@ function analises() {
 }
 const med = v => { v = v.slice().sort((a, b) => a - b); return v[Math.floor(v.length / 2)]; };
 
+/* ---------------- seção por seção (urna) de uma escola */
+async function secoesDaEscola(i) {
+  if (!E.secoes) E.secoes = fetch("dados/secoes.json").then(r => r.json());
+  const l = (await E.secoes)[i] || []; if (!l.length) return "";
+  const mx = Math.max(...l.map(s => Math.max(s[1], s[2])), 1);
+  return `<h4>Seção por seção <small>${int(l.length)} urnas · ${NA} · ${NB} · <span class="cc">casados</span></small></h4>
+    <div class="sec-lista">${l.map(([n, a, b]) => `<div class="sec"><span class="sn">Seção ${n}</span><span class="sb"><i class="ba" style="width:${a / mx * 100}%"></i><i class="bb" style="width:${b / mx * 100}%"></i></span><b><span class="ca">${int(a)}</span> · <span class="cb">${int(b)}</span> · <span class="cc">${int(Math.min(a, b))}</span></b></div>`).join("")}</div>`;
+}
+
 /* ---------------- quadro flutuante */
 function acharUnidade(tipo, chave, mun) {
   if (tipo === "escola") { const e = ESC[+chave]; return Object.assign(derivar({...e, n: 1}), {nome: e.nome, tipo, chave, escolas: [e]}); }
@@ -508,9 +518,14 @@ function popover(u, ev) {
     <div class="pp"><div class="a"><small>${NA}</small><b class="ca">${int(u.a)}</b><small>${pct(u.ap, 2)} dos válidos · ${pct(u.sa, 2)} do total ${dele("a")}</small></div><div class="b"><small>${NB}</small><b class="cb">${int(u.b)}</b><small>${pct(u.bp, 2)} dos válidos · ${pct(u.sb, 2)} do total ${dele("b")}</small></div></div>
     <div class="casou-pop"><b class="cc">${int(u.cas)}</b><span>votos casados${u.n > 1 ? " (soma das escolas)" : ""} · sintonia de <b>${pct(u.sint, 0)}</b><i class="sint" style="--s:${Math.round((u.sint || 0) * 100)}%"></i></span></div>
     <p class="nota">${razaoTxt()}: <b style="color:${FG}">${dec(u.razao, 0)}</b>${K22 ? ` · ${nm(K22)} em 2022: <b style="color:${FG}">${int(u.x22)}</b> (${pp(u.d22, 2)})` : ""} · ${esc(PART)} estadual: ${pct(u.apt, 0)} ${do_("a")} · ${esc(PART)} federal: ${pct(u.bpt, 0)} ${do_("b")}</p>
+    ${u.tipo === "escola" ? `<div class="secoes" id="secoesPop"><p class="nota">Carregando as seções…</p></div>` : ""}
     <button class="btn prim ver" data-ver="${esc(verK)}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg> Ver no mapa</button>
     ${top.length ? `<h4 style="margin-top:10px">Escolas com mais votos casados</h4><ol class="rank">${top.map(e => `<li><button data-pop="escola|${e.id}|${e.mun}"><span>${esc(e.nome)}</span><b><span class="ca">${int(e.a)}</span> · <span class="cb">${int(e.b)}</span> · <span class="cc">${int(e.cas)}</span></b></button></li>`).join("")}</ol>` : ""}`;
   pop.hidden = false;
+  pop.dataset.chave = u.tipo + "|" + u.chave;
+  if (u.tipo === "escola") secoesDaEscola(+u.chave).then(h => { const b = $("#secoesPop"); if (b && pop.dataset.chave === "escola|" + u.chave) { b.innerHTML = h; posicionar(); } });
+  const posicionar = () => { const x = ev?.clientX ?? innerWidth / 2, y = ev?.clientY ?? innerHeight / 3, w = pop.offsetWidth, h = pop.offsetHeight;
+    pop.style.left = Math.max(8, Math.min(innerWidth - w - 8, x + 14)) + "px"; pop.style.top = Math.max(8, Math.min(innerHeight - h - 8, y - 20)) + "px"; };
   const x = ev?.clientX ?? innerWidth / 2, y = ev?.clientY ?? innerHeight / 3, w = pop.offsetWidth, h = pop.offsetHeight;
   pop.style.left = Math.max(8, Math.min(innerWidth - w - 8, x + 14)) + "px"; pop.style.top = Math.max(8, Math.min(innerHeight - h - 8, y - 20)) + "px";
   E.popT = Date.now();
@@ -554,7 +569,7 @@ function escolher(x) {
   const ix = Object.fromEntries(B.campos.map((c, i) => [c, i]));
   ESC = B.escolas.map(r => ({id: r[ix.id], nome: r[ix.nome], mun: r[ix.mun], zona: r[ix.zona], bairro: r[ix.bairro] || "(sem bairro)", regional: r[ix.regional], lat: r[ix.lat], lng: r[ix.lng], el: r[ix.eleitores], comp: r[ix.comp],
     a: r[ix.a], b: r[ix.b], va: r[ix.va], vb: r[ix.vb], pa: r[ix.pa], pb: r[ix.pb], x22: r[ix.x22] || 0, vx22: r[ix.vx22] || 0}));
-  for (const e of ESC) e.cas = Math.min(e.a, e.b);
+  B.escolas.forEach((r, i) => { ESC[i].cas = ix.cs != null ? r[ix.cs] : Math.min(ESC[i].a, ESC[i].b); });   // casados contados urna por urna
   TA = ESC.reduce((s, e) => s + e.a, 0); TB = ESC.reduce((s, e) => s + e.b, 0);
   const cidades = nivelMG("mun"); E.maxAp = Math.max(...cidades.filter(c => c.va > 5000).map(c => c.ap)); E.maxBp = Math.max(...cidades.filter(c => c.vb > 5000).map(c => c.bp));
   // título e textos da abertura vindos da configuração
@@ -565,7 +580,7 @@ function escolher(x) {
   const ok = CA.conferido && CB.conferido;
   $("#fontesTexto").innerHTML = `<p><b>2026:</b> arquivos oficiais do TSE de votação e de detalhe por seção (dados abertos), somados por local de votação (escola). ${ok ? `Os totais batem com o resultado oficial: ${NA} ${int(TA)} e ${NB} ${int(TB)} votos.` : `Totais somados: ${NA} ${int(TA)} e ${NB} ${int(TB)} votos.`}</p>
     <p><b>% dos válidos:</b> ${NA} sobre os votos válidos para ${CA.cargoNome.toLowerCase()}; ${NB} sobre os válidos para ${CB.cargoNome.toLowerCase()}. <b>${razaoTxt()}</b> compara os votos dos dois no mesmo lugar (cada eleitor vota nos dois cargos).</p>
-    <p><b>Votos casados e sintonia:</b> em cada escola, os votos casados são o menor dos dois (se ${NA} teve 40 e ${NB} 25 numa escola, casaram 25). Como o voto é secreto, é o máximo de eleitores que podem ter votado nos dois ali; num bairro, cidade ou região, é a soma das escolas. A sintonia é casados ÷ o maior dos dois: 100% quando os dois têm a mesma votação em cada escola.</p>
+    <p><b>Votos casados e sintonia:</b> contados em cada seção eleitoral (urna), o menor nível que o TSE publica: se numa seção ${NA} teve 40 votos e ${NB} 25, casaram 25. Como o voto é secreto, é o máximo de eleitores daquela urna que podem ter votado nos dois; na escola, no bairro, na cidade e na região, é a soma das seções. A sintonia é casados ÷ o maior dos dois: 100% quando os dois têm a mesma votação em cada escola.</p>
     <p><b>Peso no total de cada um:</b> compara o peso do lugar no total de cada um (a parte dos votos ${do_("a")} que veio dali contra a parte dos votos ${do_("b")}). Não depende do tamanho de cada votação.</p>
     <p><b>Peso no partido:</b> votos de cada um sobre todos os votos do ${esc(PART)} no mesmo cargo (nominais e de legenda).</p>
     ${K22 ? `<p><b>${nm(K22)} em 2022:</b> dados abertos do TSE por seção, ligados às escolas de 2026 pela zona e seção; em 2022 ${ele(K22)} concorreu pelo ${esc(C(K22).partido22)} e teve ${int(C(K22).votos22)} votos. ${nm(K22 === "a" ? "b" : "a")} não concorreu em 2022.</p>` : ""}
