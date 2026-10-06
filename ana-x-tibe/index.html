@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ana Paula Siqueira × Luis Tibé · 2026 · MOBI</title>
+<meta name="description" content="Comparação entre Ana Paula Siqueira (Deputada Estadual) e Luis Tibé (Deputado Federal) nas Eleições 2026 em Minas Gerais: Belo Horizonte por regional, bairro e escola, cidades, regiões e zonas. Dados oficiais do TSE.">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0a1620">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="MOBI · Mobilização Inteligente">
+<meta property="og:title" content="Ana Paula Siqueira × Luis Tibé · Eleições 2026">
+<meta property="og:description" content="A dobradinha em Belo Horizonte e em Minas: regional por regional, bairro por bairro, escola por escola. Dados oficiais do TSE.">
+<meta property="og:image" content="https://resultado.mobinteligente.com.br/ana-x-tibe/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:url" content="https://resultado.mobinteligente.com.br/ana-x-tibe/">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://resultado.mobinteligente.com.br/ana-x-tibe/og.jpg">
+<link rel="icon" type="image/jpeg" href="marca/mobi-simbolo-64.png">
+<link rel="preload" href="marca/Unbounded-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="estilo.css?v=9">
+</head>
+<body>
+<div class="wrap">
+  <header class="topo">
+    <a href="/" class="mobi" aria-label="Resultados MOBI"><img src="marca/mobi-logo-light.png" alt="MOBI — Mobilização Inteligente"></a>
+    <span class="tag"><i></i>Dados oficiais do TSE · Eleições 2026</span>
+  </header>
+
+  <section class="hero">
+    <div class="kicker" id="kicker">Dobradinha PT e AVANTE · Eleições 2026 · Minas Gerais</div>
+    <h1 id="titulo"><span class="na">Ana Paula Siqueira</span> <span class="x">×</span> <span class="nb">Luis Tibé</span></h1>
+    <p class="lead" id="lead">A comparação completa entre o voto da deputada estadual e do deputado federal em 2026: Belo Horizonte regional por regional, bairro por bairro e escola por escola, as cidades com regionais e todo o estado.</p>
+    <div class="duelo" id="duelo"><div class="carregando">Carregando os dados oficiais…</div></div>
+  </section>
+
+  <section class="destaques" id="destaques"></section>
+
+  <div class="controles" id="controles">
+    <nav class="abas" id="abas" role="tablist" aria-label="Seções">
+      <button role="tab" data-aba="bh" aria-selected="true">Belo Horizonte</button>
+      <button role="tab" data-aba="cidades" aria-selected="false">Cidades com regionais</button>
+      <button role="tab" data-aba="minas" aria-selected="false">Minas Gerais</button>
+      <button role="tab" data-aba="escolas" aria-selected="false">Escolas</button>
+      <button role="tab" data-aba="secoes" aria-selected="false">Seções e zonas</button>
+      <button role="tab" data-aba="secoes" aria-selected="false">Seções e zonas</button>
+      <button role="tab" data-aba="analises" aria-selected="false">Análises</button>
+    </nav>
+    <label class="busca"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="qBusca" placeholder="Buscar escola, bairro ou cidade…" autocomplete="off" aria-label="Buscar escola, bairro ou cidade"><div class="ac" id="acBusca" hidden></div></label>
+  </div>
+
+  <section class="painel" id="p-bh"></section>
+  <section class="painel" id="p-cidades" hidden>
+    <div class="cab"><h2>Cidades com regionais</h2><p>As cidades de Minas com bairros e regionais oficiais mapeados. Escolha a cidade para ver a mesma análise de Belo Horizonte.</p></div>
+    <div class="chips-cid" id="chipsCid"></div>
+    <div id="cidadeCorpo"></div>
+  </section>
+  <section class="painel" id="p-minas" hidden></section>
+  <section class="painel" id="p-escolas" hidden></section>
+  <section class="painel" id="p-secoes" hidden></section>
+  <section class="painel" id="p-secoes" hidden></section>
+  <section class="painel" id="p-analises" hidden></section>
+
+  <section id="fontes"><div class="cab"><h2>Fontes e método</h2></div><div class="metodo" id="fontesTexto"></div></section>
+  <footer>FONTE: TSE · DADOS ABERTOS 2026 E 2022 · MOBI — MOBILIZAÇÃO INTELIGENTE</footer>
+</div>
+<div id="pop" role="dialog" aria-label="Detalhes" hidden></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="app.js?v=10"></script>
+</body>
+</html>
