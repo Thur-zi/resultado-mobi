@@ -20,7 +20,7 @@
 <link rel="icon" type="image/jpeg" href="marca/mobi-simbolo-64.png">
 <link rel="preload" href="marca/Unbounded-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="estilo.css?v=4">
+<link rel="stylesheet" href="estilo.css?v=5">
 </head>
 <body>
 <div class="wrap">
@@ -44,6 +44,7 @@
       <button role="tab" data-aba="cidades" aria-selected="false">Cidades com regionais</button>
       <button role="tab" data-aba="minas" aria-selected="false">Minas Gerais</button>
       <button role="tab" data-aba="escolas" aria-selected="false">Escolas</button>
+      <button role="tab" data-aba="secoes" aria-selected="false">Seções e zonas</button>
       <button role="tab" data-aba="analises" aria-selected="false">Análises</button>
     </nav>
     <label class="busca"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
@@ -58,6 +59,7 @@
   </section>
   <section class="painel" id="p-minas" hidden></section>
   <section class="painel" id="p-escolas" hidden></section>
+  <section class="painel" id="p-secoes" hidden></section>
   <section class="painel" id="p-analises" hidden></section>
 
   <section id="fontes"><div class="cab"><h2>Fontes e método</h2></div><div class="metodo" id="fontesTexto"></div></section>
@@ -66,6 +68,6 @@
 <div id="pop" role="dialog" aria-label="Detalhes" hidden></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="app.js?v=4"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>

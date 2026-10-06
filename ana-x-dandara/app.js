@@ -171,6 +171,7 @@ function irAba(a, rolar = true) {
   if (a === "cidades") { chipsCidades(); cidade(E.cidade || E.B.cidadesOSM.find(m => m !== BH), $("#cidadeCorpo")); }
   if (a === "minas") minas();
   if (a === "escolas") escolas();
+  if (a === "secoes") secoesZonas();
   if (a === "analises") analises();
   if (rolar) { const ctl = $("#controles"), fixa = getComputedStyle(ctl).position === "sticky" ? ctl.offsetHeight : 0; scrollTo({top: $("#p-" + a).getBoundingClientRect().top + scrollY - fixa - 10, behavior: "smooth"}); }
 }
@@ -449,6 +450,92 @@ function escolas() {
   animar($("#p-escolas"));
 }
 
+/* ---------------- seções (urnas) e zonas eleitorais */
+async function carregarSecoes() {
+  if (!E.secoes) E.secoes = fetch("dados/secoes.json").then(r => r.json());
+  const S = await E.secoes;
+  if (!E.SEC) { E.SEC = []; S.forEach((l, i) => { const e = ESC[i]; for (const [n, a, b] of l) E.SEC.push({i, n, a, b, cas: Math.min(a, b), sint: Math.max(a, b) ? Math.min(a, b) / Math.max(a, b) : null, zona: String(e.zona), mun: e.mun, escola: e.nome, bairro: e.bairro}); }); }
+  return E.SEC;
+}
+const nomeZona = z => E.B.zonas[z]?.nome || "Zona " + z;
+const rotSec = x => `Seção ${x.n} · Zona ${x.zona}`;
+const rankS = (l, k, n) => `<ol class="rank">${l.filter(x => x[k] > 0).sort((p, q) => q[k] - p[k] || q.cas - p.cas).slice(0, n).map(x => `<li><button data-pop="escola|${x.i}|${x.mun}"><span>${esc(rotSec(x))}<small class="sub">${esc(x.escola)} · ${esc(MUN(x.mun).nome)}</small>${k === "cas" ? `<i class="sint" style="--s:${Math.round((x.sint || 0) * 100)}%"></i>` : ""}</span><b>${k === "cas" ? `<span class="ca">${int(x.a)}</span> · <span class="cb">${int(x.b)}</span> · <span class="cc">${int(x.cas)}</span>` : `<span class="${k === "a" ? "ca" : "cb"}">${int(x[k])}</span>`}</b></button></li>`).join("") || "<li class='nota'>nenhuma</li>"}</ol>`;
+const SCOLS = [["n", "Seção", x => x.n], ["zona", "Zona", x => x.zona], ["escola", "Local de votação", x => esc(x.escola)], ["bairro", "Bairro", x => esc(x.bairro)], ["cid", "Cidade", x => esc(MUN(x.mun).nome)], ["a", () => NA, x => int(x.a), "ta"], ["b", () => NB, x => int(x.b), "tb"], ["cas", "Casados", x => int(x.cas), "tc"], ["sint", "Sintonia", x => pct(x.sint, 0), "tc"]];
+function secTabela(id, l, titulo) {
+  E.stabs = E.stabs || {}; E.stabs[id] = {l, titulo};
+  const o = E.ordem[id] || {k: "cas", dir: -1}, f = semAc(E.filtro[id] || "");
+  const val = (x, k) => k === "cid" ? MUN(x.mun).nome : x[k];
+  const ls = l.filter(x => !f || semAc(`secao ${x.n} zona ${x.zona} ${x.escola} ${x.bairro} ${MUN(x.mun).nome}`).includes(f))
+    .sort((p, q) => { const a = val(p, o.k), b = val(q, o.k); return (typeof a === "string" ? a.localeCompare(b) : (a ?? -1) - (b ?? -1)) * o.dir; });
+  const LIM = 400, mostra = ls.slice(0, LIM);
+  return `<div class="ferr" data-stab="${id}"><h4 style="margin:0;flex:1">${esc(titulo)} <small>${int(ls.length)} seções${ls.length > LIM ? ` · mostrando ${LIM}, use o filtro ou a ordem` : ""} · toque no título da coluna para ordenar</small></h4><input type="search" placeholder="Filtrar seção, zona, escola, bairro ou cidade…" value="${esc(E.filtro[id] || "")}" data-sfiltro="${id}"><button class="btn" data-scsv="${id}">Baixar CSV</button></div>
+    <div class="tab-wrap"><table><thead><tr>${SCOLS.map(([k, t, , c]) => `<th class="${c || ""}" data-sord="${id}|${k}">${esc(typeof t === "function" ? t() : t)}${o.k === k ? (o.dir < 0 ? " ↓" : " ↑") : ""}</th>`).join("")}</tr></thead>
+    <tbody>${mostra.map(x => `<tr data-pop="escola|${x.i}|${x.mun}">${SCOLS.map(([k, , g], j) => `<td${j > 1 && j < 5 ? ' style="text-align:left"' : ""}>${j === 0 ? `<b>${g(x)}</b>` : g(x)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+}
+function reSecTabela(id) { const t = E.stabs[id], box = $(`[data-stab="${id}"]`).parentElement, foco = document.activeElement?.dataset?.sfiltro === id; box.innerHTML = secTabela(id, t.l, t.titulo); if (foco) { const i = box.querySelector("[data-sfiltro]"); i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }
+document.addEventListener("click", e => {
+  const th = e.target.closest("[data-sord]"); if (th) { const [id, k] = th.dataset.sord.split("|"); const o = E.ordem[id] || {k: "cas", dir: -1}; E.ordem[id] = o.k === k ? {k, dir: -o.dir} : {k, dir: ["n", "zona", "escola", "bairro", "cid"].includes(k) ? 1 : -1}; reSecTabela(id); return; }
+  const c = e.target.closest("[data-scsv]"); if (c) { const t = E.stabs[c.dataset.scsv];
+    const linhas = [["Seção", "Zona", "Local de votação", "Bairro", "Cidade", NA, NB, "Votos casados", "Sintonia %"].join(";")].concat(t.l.map(x => [x.n, x.zona, x.escola, x.bairro, MUN(x.mun).nome, x.a, x.b, x.cas, dec((x.sint || 0) * 100, 1)].map(v => `"${String(v).replace(/"/g, '""')}"`).join(";")));
+    Object.assign(document.createElement("a"), {href: URL.createObjectURL(new Blob(["\ufeff" + linhas.join("\n")], {type: "text/csv"})), download: `${CF.slug}-${c.dataset.scsv}.csv`}).click(); return; }
+  const z = e.target.closest("[data-zona]"); if (z) { E.zona = z.dataset.zona; zonaDetalhe(true); }
+});
+document.addEventListener("input", e => { const f = e.target.closest("[data-sfiltro]"); if (f) { E.filtro[f.dataset.sfiltro] = f.value; reSecTabela(f.dataset.sfiltro); } });
+document.addEventListener("change", e => { if (e.target.id === "zonaSel") { E.zona = e.target.value; zonaDetalhe(true); } });
+
+async function secoesZonas() {
+  const p = $("#p-secoes");
+  if (!E.SEC) p.innerHTML = `<div class="cab"><h2>Seções e zonas</h2><p>Carregando as seções eleitorais…</p></div>`;
+  const SEC = await carregarSecoes(), zonas = nivelMG("zona").filter(z => z.a + z.b > 0);
+  const dois = SEC.filter(x => x.a > 0 && x.b > 0), soA = SEC.filter(x => x.a > 0 && !x.b).length, soB = SEC.filter(x => x.b > 0 && !x.a).length, cas = SEC.reduce((t, x) => t + x.cas, 0);
+  const faixas = [["até 25%", 0, .25], ["25 a 50%", .25, .5], ["50 a 75%", .5, .75], ["75 a 100%", .75, 1.01]].map(([n, a, b]) => [n, dois.filter(x => x.sint >= a && x.sint < b).length]);
+  if (!E.zona || !zonas.some(z => z.chave === E.zona)) E.zona = zonas.slice().sort((a, b) => b.cas - a.cas)[0].chave;
+  p.innerHTML = `<div class="cab"><h2>Seções e zonas</h2><p>A urna é o menor pedaço que o TSE publica. Aqui estão as ${int(SEC.length)} seções eleitorais onde pelo menos um dos dois teve voto, e as ${int(zonas.length)} zonas eleitorais de Minas. Toque numa seção para abrir a escola dela.</p></div>
+    <div class="kpis"><div class="kpi"><b class="cc">${int(cas)}</b><span>votos casados somando todas as urnas</span></div><div class="kpi"><b>${int(dois.length)}</b><span>seções com voto dos dois (${pct(dois.length / SEC.length, 0)})</span></div>
+      <div class="kpi"><b class="ca">${int(soA)}</b><span>seções só com ${NA}</span></div><div class="kpi"><b class="cb">${int(soB)}</b><span>seções só com ${NB}</span></div></div>
+    <div class="cab"><h3>Seções eleitorais</h3></div>
+    <div class="grid3"><div class="card"><h4><span class="ca">${NA}</span> · mais votos</h4>${rankS(SEC, "a", 12)}</div><div class="card"><h4><span class="cb">${NB}</span> · mais votos</h4>${rankS(SEC, "b", 12)}</div>
+      <div class="card"><h4><span class="cc">Mais votos casados</span> <small>${NA} · ${NB} · casados</small></h4>${rankS(SEC, "cas", 12)}</div></div>
+    <div class="grid2" style="margin-top:14px"><div class="card"><h4>Seções com voto dos dois, por sintonia <small>quanto a votação dos dois se parece em cada urna</small></h4><canvas id="g-sint" height="240"></canvas></div>
+      <div class="card"><h4>Zonas com mais votos casados <small>toque para ver as seções da zona</small></h4><ol class="rank">${zonas.slice().sort((a, b) => b.cas - a.cas).slice(0, 10).map(z => `<li><button data-zona="${esc(z.chave)}"><span>Zona ${esc(z.chave)} · ${esc(nomeZona(z.chave))}<i class="sint" style="--s:${Math.round((z.sint || 0) * 100)}%"></i></span><b><span class="ca">${int(z.a)}</span> · <span class="cb">${int(z.b)}</span> · <span class="cc">${int(z.cas)}</span></b></button></li>`).join("")}</ol></div></div>
+    <div class="card" style="margin-top:14px">${secTabela("sec-todas", SEC, "Todas as seções")}</div>
+    <div class="cab"><h3>Zonas eleitorais</h3></div>
+    <div class="grid3"><div class="card"><h4><span class="ca">${NA}</span> · mais votos</h4>${rank(zonas, "a", 12)}</div><div class="card"><h4><span class="cb">${NB}</span> · mais votos</h4>${rank(zonas, "b", 12)}</div>
+      <div class="card"><h4><span class="cc">Mais votos casados</span> <small>${NA} · ${NB} · casados</small></h4>${rankC(zonas, 12)}</div></div>
+    <div class="card" style="margin-top:14px">${tabela(zonas, "Zona", "zonas-t")}</div>
+    <div class="cab"><h3>Uma zona por dentro</h3><p>Escolha a zona para ver as escolas no mapa e todas as seções dela.</p></div>
+    <div class="linha"><span class="rot">Zona</span><select id="zonaSel">${zonas.slice().sort((a, b) => +a.chave - +b.chave).map(z => `<option value="${esc(z.chave)}"${z.chave === E.zona ? " selected" : ""}>Zona ${esc(z.chave)} · ${esc(nomeZona(z.chave))} · ${int(z.cas)} casados</option>`).join("")}</select></div>
+    <div id="zonaCorpo"></div>`;
+  grafico("g-sint", {type: "bar", data: {labels: faixas.map(f => f[0]), datasets: [{label: "Seções", data: faixas.map(f => f[1]), backgroundColor: rampa(COR.c).slice(1), borderRadius: 6}]},
+    options: {plugins: {legend: {display: false}, tooltip: {callbacks: {label: c => `${int(c.raw)} seções`}}}, scales: {y: {grid: grade, title: {display: true, text: "seções"}}, x: {grid: {display: false}, title: {display: true, text: "sintonia na urna"}}}}});
+  animar(p);
+  return zonaDetalhe(false);
+}
+function zonaDetalhe(rolar) {
+  const z = E.zona, u = nivelMG("zona").find(x => x.chave === z), l = E.SEC.filter(x => x.zona === z), box = $("#zonaCorpo"); if (!box || !u) return;
+  const sel = $("#zonaSel"); if (sel) sel.value = z;
+  const escs = u.escolas.map(e => Object.assign(derivar({...e, n: 1}), {nome: e.nome, tipo: "escola", chave: e.id, escolas: [e]}));
+  const cids = [...new Set(u.escolas.map(e => MUN(e.mun).nome))];
+  box.innerHTML = `<div class="kpis"><div class="kpi"><b>${int(u.escolas.length)} · ${int(l.length)}</b><span>locais de votação · seções com voto · ${esc(cids.slice(0, 4).join(", "))}${cids.length > 4 ? ` e mais ${cids.length - 4}` : ""}</span></div>
+      <div class="kpi"><b class="ca">${int(u.a)}</b><span>votos ${do_("a")} · ${pct(u.ap, 2)} dos válidos</span></div><div class="kpi"><b class="cb">${int(u.b)}</b><span>votos ${do_("b")} · ${pct(u.bp, 2)} dos válidos</span></div>
+      <div class="kpi"><b class="cc">${int(u.cas)}</b><span>votos casados · sintonia de ${pct(u.sint, 0)}</span></div></div>
+    <div class="mapa-wrap"><div><div class="mapa" id="mapa-zona"></div><div class="legenda" id="leg-zona"></div></div><aside class="card lateral"><h4>Escolas da zona com mais votos casados</h4>${rankC(escs, 12)}</aside></div>
+    <div class="card" style="margin-top:14px">${secTabela("sec-zona", l, `Seções da zona ${z}`)}</div>`;
+  animar(box);
+  if (E.mapas.zona) E.mapas.zona.remove();
+  E.reg.zona = new Map();
+  const el = $("#mapa-zona"), mapa = L.map(el, {scrollWheelZoom: false, preferCanvas: true, zoomSnap: .25}); E.mapas.zona = mapa;
+  L.tileLayer(TILES, {attribution: "Esri · OpenStreetMap · TSE", maxZoom: 17}).addTo(mapa);
+  mapa.on("click focus", () => mapa.scrollWheelZoom.enable());
+  const q = quebras(escs.map(x => x.cas)), mx = Math.max(...escs.map(x => x.el)), g = L.featureGroup().addTo(mapa);
+  for (const x of escs) { const e = x.escolas[0]; if (e.lat == null) continue;
+    const mk = L.circleMarker([e.lat, e.lng], {radius: 4 + 10 * Math.sqrt(e.el / mx), color: BORDA_MAPA, weight: .8, fillOpacity: .92, fillColor: cor(x, "cas", q)}).bindTooltip(dica(x, "escola · " + e.bairro), {sticky: true}).on("click", ev => popover(x, ev.originalEvent)).addTo(g); registrar("zona", `escola|${x.chave}`, mk); }
+  const b = g.getBounds(); if (b.isValid()) mapa.fitBounds(b, {padding: [16, 16], maxZoom: 15});
+  new ResizeObserver(() => mapa.invalidateSize()).observe(el);
+  $("#leg-zona").innerHTML = legenda("cas", q);
+  if (rolar) { const ctl = $("#controles"), fixa = getComputedStyle(ctl).position === "sticky" ? ctl.offsetHeight : 0; scrollTo({top: box.getBoundingClientRect().top + scrollY - fixa - 60, behavior: "smooth"}); }
+}
+
 /* ---------------- análises */
 function correl(xs, ys, ws) {
   let sw = 0, mx = 0, my = 0; for (let i = 0; i < xs.length; i++) { sw += ws[i]; mx += ws[i] * xs[i]; my += ws[i] * ys[i]; }
@@ -585,5 +672,5 @@ function escolher(x) {
     <p><b>Peso no partido:</b> votos de cada um sobre todos os votos do ${esc(PART)} no mesmo cargo (nominais e de legenda).</p>
     ${K22 ? `<p><b>${nm(K22)} em 2022:</b> dados abertos do TSE por seção, ligados às escolas de 2026 pela zona e seção; em 2022 ${ele(K22)} concorreu pelo ${esc(C(K22).partido22)} e teve ${int(C(K22).votos22)} votos. ${nm(K22 === "a" ? "b" : "a")} não concorreu em 2022.</p>` : ""}
     <p><b>Bairros e regionais:</b> contornos oficiais do OpenStreetMap nas cidades onde estão mapeados (${B.cidadesOSM.map(m => MUN(m).nome).join(", ")}). Nas outras cidades, o bairro é o do cadastro do TSE.</p>`;
-  const h = location.hash.slice(1); irAba(["bh", "cidades", "minas", "escolas", "analises"].includes(h) ? h : "bh", false);
+  const h = location.hash.slice(1); irAba(["bh", "cidades", "minas", "escolas", "secoes", "analises"].includes(h) ? h : "bh", false);
 })();
