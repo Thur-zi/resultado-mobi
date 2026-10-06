@@ -1,0 +1,21 @@
+/* Tema Time Ana (Ana Paula Siqueira): roxo, lilás, amarelo e vermelho, títulos em Monigue — sobre o modelo de comparação MOBI */
+@font-face{font-family:"Monigue";src:url(marca/Monigue-Regular.woff2) format("woff2");font-display:swap}
+:root{--bg:#2a0b4f;--bg2:#330f5e;--card:#3a1468;--card2:#45197a;--borda:rgba(215,173,242,.16);--borda2:rgba(215,173,242,.32);
+  --fg:#fff9f4;--muted:#dcc6ee;--faint:#b79fd0;--creme:#d7adf2;--navy:#6d1eb2;--verde:#f33114;--ok:#7be0a4;--neg:#ff8b7d}
+body{background:radial-gradient(1000px 620px at 88% -8%,rgba(243,49,20,.22),transparent 60%),radial-gradient(900px 600px at -8% 12%,rgba(215,173,242,.18),transparent 60%),var(--bg)!important}
+body::before{content:"";position:fixed;right:-120px;top:120px;width:520px;height:520px;background:url(marca/estrela.svg) center/contain no-repeat;opacity:.06;pointer-events:none;z-index:0}
+.wrap{position:relative;z-index:1}
+h1,.cab h2{font-family:"Monigue","Anton",Impact,sans-serif!important;font-weight:400!important;letter-spacing:.01em!important;text-transform:uppercase}
+h1{font-size:clamp(40px,7vw,86px)!important;line-height:.92!important}
+.cab h2{font-size:clamp(26px,3.4vw,40px)!important}
+.kicker{color:var(--creme)!important}
+.kicker::before{background:#f33114!important}
+.abas button[aria-selected=true]{background:#f33114!important;color:#fff!important;box-shadow:0 8px 20px -10px #f33114!important}
+.seg button[aria-pressed=true]{background:var(--creme)!important;color:#2a0b4f!important}
+.lado .selo{filter:drop-shadow(0 8px 14px rgba(0,0,0,.35))}
+.controles{background:linear-gradient(var(--bg) 80%,rgba(42,11,79,0))!important}
+th,th:first-child,thead th:first-child{background:#3a1468!important}
+td:first-child{background:#3d166d!important}
+#pop,.ac{background:#3a1468!important}
+.leaflet-container{background:#22093f!important}
+.leaflet-tooltip{background:#3a1468!important;color:#fff9f4!important}
