@@ -683,7 +683,7 @@ async function desenharZona(z, u, escs) {
 }
 function zonaDetalhe(rolar) {
   const z = E.zona, u = nivelMG("zona").find(x => x.chave === z), l = E.SEC.filter(x => x.zona === z), box = $("#zonaCorpo"); if (!box || !u) return;
-  const sel = $("#zonaSel"); if (sel) sel.value = z;
+  const sel = $("#zonaSel"); if (sel) { sel.value = z; sel._sync?.(); }
   const escs = u.escolas.map(e => Object.assign(derivar({...e, n: 1}), {nome: e.nome, tipo: "escola", chave: e.id, escolas: [e]}));
   const cids = [...new Set(u.escolas.map(e => MUN(e.mun).nome))];
   box.innerHTML = `<div class="kpis"><div class="kpi"><b>${int(u.escolas.length)} · ${int(l.length)}</b><span>locais de votação · seções com voto · ${esc(cids.slice(0, 4).join(", "))}${cids.length > 4 ? ` e mais ${cids.length - 4}` : ""}</span></div>
@@ -814,6 +814,34 @@ function escolher(x) {
   if (x.t === "Cidade" && E.B.cidadesOSM.includes(m)) { if (m === BH) irAba("bh"); else { E.cidade = m; irAba("cidades"); } return; }
   verNoMapa(x.u.tipo, x.u.chave, m);
 }
+
+/* ---------------- listas pesquisáveis: todo <select> da página ganha um campo de busca por cima */
+function pesquisavel(sel) {
+  if (sel.dataset.pesq) return; sel.dataset.pesq = 1;
+  const box = document.createElement("div"), inp = document.createElement("input"), lista = document.createElement("div");
+  box.className = "pesq"; inp.type = "text"; inp.autocomplete = "off"; inp.className = "pesq-in"; inp.placeholder = "Digite para buscar…"; inp.setAttribute("role", "combobox"); inp.setAttribute("aria-label", sel.closest("label")?.querySelector("span")?.textContent || "Buscar");
+  lista.className = "pesq-lista"; lista.hidden = true; lista.setAttribute("role", "listbox");
+  sel.parentNode.insertBefore(box, sel); box.append(inp, lista, sel); sel.style.display = "none";
+  const txt = () => sel.options[sel.selectedIndex]?.text || "";
+  let ativos = [], ai = 0;
+  const desenhar = q => { const t = semAc(q.trim()); ativos = [...sel.options].filter(o => !t || semAc(o.text).includes(t)); ai = Math.max(0, ativos.findIndex(o => o.selected)); if (t) ai = 0;
+    lista.innerHTML = ativos.slice(0, 400).map((o, i) => `<button type="button" role="option" data-i="${i}" class="${o.selected ? "sel" : ""}${i === ai ? " ativo" : ""}">${esc(o.text)}</button>`).join("") + (ativos.length > 400 ? `<p class="nota">mais ${int(ativos.length - 400)} · continue digitando</p>` : "") || `<p class="nota">Nada encontrado.</p>`;
+    lista.hidden = false; lista.querySelector(".ativo")?.scrollIntoView({block: "nearest"}); };
+  const escolher = o => { if (!o) return; sel.value = o.value; inp.value = o.text; lista.hidden = true; sel.dispatchEvent(new Event("change", {bubbles: true})); };
+  inp.value = txt();
+  inp.addEventListener("focus", () => { inp.select(); desenhar(""); });
+  inp.addEventListener("input", () => desenhar(inp.value));
+  inp.addEventListener("keydown", e => {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); if (lista.hidden) desenhar(""); const bs = lista.querySelectorAll("button"); ai = Math.max(0, Math.min(bs.length - 1, ai + (e.key === "ArrowDown" ? 1 : -1))); bs.forEach((b, i) => b.classList.toggle("ativo", i === ai)); bs[ai]?.scrollIntoView({block: "nearest"}); }
+    else if (e.key === "Enter") { e.preventDefault(); escolher(ativos[ai]); inp.blur(); }
+    else if (e.key === "Escape") { lista.hidden = true; inp.value = txt(); inp.blur(); }
+  });
+  lista.addEventListener("mousedown", e => e.preventDefault());
+  lista.addEventListener("click", e => { const b = e.target.closest("[data-i]"); if (b) { escolher(ativos[+b.dataset.i]); inp.blur(); } });
+  inp.addEventListener("blur", () => setTimeout(() => { lista.hidden = true; inp.value = txt(); }, 120));
+  sel._sync = () => { inp.value = txt(); };
+}
+new MutationObserver(() => document.querySelectorAll("select:not([data-pesq])").forEach(pesquisavel)).observe(document.body, {childList: true, subtree: true});
 
 /* ---------------- início */
 (async function () {
