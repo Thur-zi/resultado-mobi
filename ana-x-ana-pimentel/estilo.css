@@ -248,3 +248,12 @@ h4,.abas button{font-family:var(--texto);font-weight:800}
 .leaflet-container{background:#0d1a24}
 @media (max-width:620px){.lado .topo-l{gap:12px}.lado img.foto{width:84px;height:112px}.selo-txt b{font-size:21px}.lado .selo{height:66px}}
 .meio .mq b{font:800 14px/1.3 var(--titulo);display:inline}
+
+/* convergência da dobradinha: votos casados e sintonia */
+.cc{color:#88cc00}
+.dest.conv{border-color:rgba(136,204,0,.45);background:linear-gradient(160deg,rgba(136,204,0,.12),transparent 70%)}
+.mq.casou{margin-top:12px;font-size:13.5px}.mq.casou b{display:block;font-size:22px;font-family:Unbounded,sans-serif;margin:2px 0}.mq.casou small{display:block;color:var(--faint);font-size:12px;line-height:1.35}
+i.sint{display:block;height:4px;margin-top:4px;border-radius:3px;max-width:160px;background:linear-gradient(90deg,#88cc00 var(--s),rgba(223,233,239,.12) var(--s))}
+.casou-pop{display:flex;gap:10px;align-items:center;margin:10px 0 4px;padding:9px 11px;border-radius:12px;background:rgba(136,204,0,.1);border:1px solid rgba(136,204,0,.35)}
+.casou-pop b{font:800 22px Unbounded,sans-serif}.casou-pop span{font-size:12.5px;color:var(--muted);flex:1}
+th.tc{color:#88cc00}

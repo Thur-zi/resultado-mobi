@@ -1,6 +1,8 @@
 /* Comparação de dois candidatos (um estadual "a" e um federal "b") nas Eleições 2026 em Minas Gerais.
    Página genérica: nomes, cargos, cores e textos vêm de dados/base.json → cfg.
-   Unidade básica: local de votação (escola); a página soma para bairro, regional, cidade, zona e regiões. */
+   Unidade básica: local de votação (escola); a página soma para bairro, regional, cidade, zona e regiões.
+   Convergência: em cada escola, "votos casados" = o menor dos dois (o máximo de eleitores que podem ter votado nos dois,
+   já que o voto é secreto); "sintonia" = casados ÷ o maior dos dois (100% = mesma votação no mesmo lugar). */
 "use strict";
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -28,14 +30,14 @@ const razaoTxt = () => `${NA} a cada 100 ${do_("b")}`;
 function configurar(cfg) {
   CF = cfg; CA = cfg.cand.a; CB = cfg.cand.b; NA = CA.curto; NB = CB.curto; K22 = cfg.ano22; PART = cfg.partido;
   BGHEX = parseInt(cfg.paleta.bg.slice(1), 16);
-  COR = {a: CA.cor, b: CB.cor, neutro: cfg.paleta.neutro, ok: "#88cc00", neg: "#ff7a6b"};
+  COR = {a: CA.cor, b: CB.cor, neutro: cfg.paleta.neutro, ok: "#88cc00", neg: "#ff7a6b", c: "#88cc00"};
   DIVREL = cfg.paleta.escala;
   const r = document.documentElement.style;
   r.setProperty("--a", CA.cor); r.setProperty("--a2", CA.cor2); r.setProperty("--b", CB.cor); r.setProperty("--b2", CB.cor2);
-  MODOS = [["mais", "Quem teve mais votos"], ["rel", "Peso no total de cada um"], ["ap", NA + " %"], ["bp", NB + " %"], ["a", NA + " votos"], ["b", NB + " votos"], ["razao", razaoTxt()]];
+  MODOS = [["cas", "Votos casados"], ["sint", "Sintonia"], ["mais", "Quem teve mais votos"], ["rel", "Peso no total de cada um"], ["ap", NA + " %"], ["bp", NB + " %"], ["a", NA + " votos"], ["b", NB + " votos"], ["razao", razaoTxt()]];
   if (K22) MODOS.push(["d22", `${nm(K22)} 2022 → 2026`]);
   COLS = [["el", "Eleitores", int], ["a", NA, int, "ta"], ["ap", "% válidos", x => pct(x, 2), "ta"], ["sa", "% do total " + dele("a"), x => pct(x, 2), "ta"], ["b", NB, int, "tb"], ["bp", "% válidos", x => pct(x, 2), "tb"], ["sb", "% do total " + dele("b"), x => pct(x, 2), "tb"],
-    ["razao", `${CA.ini} a cada 100 ${CB.ini}`, x => dec(x, 0)], ["apt", `% do ${PART} (est.)`, x => pct(x, 0), "ta"], ["bpt", `% do ${PART} (fed.)`, x => pct(x, 0), "tb"]];
+    ["cas", "Casados", int, "tc"], ["sint", "Sintonia", x => pct(x, 0), "tc"], ["razao", `${CA.ini} a cada 100 ${CB.ini}`, x => dec(x, 0)], ["apt", `% do ${PART} (est.)`, x => pct(x, 0), "ta"], ["bpt", `% do ${PART} (fed.)`, x => pct(x, 0), "tb"]];
   if (K22) COLS.push(["x22", nm(K22) + " 2022", int, "t" + K22], ["d22", "Δ " + nm(K22), x => `<span class="${x > 0 ? "pos" : "neg"}">${pp(x, 2)}</span>`, "t" + K22]);
   Chart.defaults.color = "#a9b8c4"; Chart.defaults.font.family = "Inter Tight, system-ui, sans-serif"; Chart.defaults.borderColor = "rgba(223,233,239,.08)";
 }
@@ -65,7 +67,7 @@ const obsGraf = "IntersectionObserver" in window ? new IntersectionObserver(es =
 
 /* ---------------- agregação */
 let ESC = [], TA = 1, TB = 1;
-const CAMPOS = ["el", "comp", "a", "b", "va", "vb", "pa", "pb", "x22", "vx22"];
+const CAMPOS = ["el", "comp", "a", "b", "va", "vb", "pa", "pb", "x22", "vx22", "cas"];
 function soma(lista) {
   const o = {n: lista.length}; for (const k of CAMPOS) o[k] = 0;
   for (const e of lista) for (const k of CAMPOS) o[k] += e[k];
@@ -79,6 +81,7 @@ function derivar(o) {
   o.mais = (o.a + o.b) ? Math.log2((o.a + 1) / (o.b + 1)) : null;   // >0: o candidato "a" teve mais votos que o "b" no lugar
   if (K22) { const agora = o[K22 + "p"]; o.x22p = o.vx22 ? o.x22 / o.vx22 : null; o.d22 = agora != null && o.x22p != null ? agora - o.x22p : null; o.d22v = o[K22] - o.x22; }
   o.apt = o.pa ? o.a / o.pa : null; o.bpt = o.pb ? o.b / o.pb : null;
+  o.sint = (o.a + o.b) ? o.cas / Math.max(o.a, o.b) : null;   // sintonia: 1 = os dois com a mesma votação em cada escola
   return o;
 }
 function agrupar(lista, chave, nome, tipo) {
@@ -97,7 +100,7 @@ const nivelMG = n => CACHE[n] || (CACHE[n] = agrupar(ESC, NIV[n][2], NIV[n][3], 
 const mistura = (c, t) => { const a = parseInt(c.slice(1), 16), b = BGHEX; const r = s => Math.round(((b >> s) & 255) * (1 - t) + ((a >> s) & 255) * t); return `rgb(${r(16)},${r(8)},${r(0)})`; };
 const rampa = c => [.2, .38, .58, .8, 1].map(t => mistura(c, t));
 function quebras(v) { v = v.filter(x => x != null && isFinite(x)).sort((a, b) => a - b); return [.2, .4, .6, .8].map(q => v[Math.floor(q * (v.length - 1))]); }
-const rampaDe = modo => /^a/.test(modo) ? rampa(COR.a) : /^b/.test(modo) ? rampa(COR.b) : rampa(COR.neutro);
+const rampaDe = modo => modo === "cas" || modo === "sint" ? rampa(COR.c) : /^a/.test(modo) ? rampa(COR.a) : /^b/.test(modo) ? rampa(COR.b) : rampa(COR.neutro);
 function cor(u, modo, q) {
   if (!u || !(u.a + u.b + u.va)) return VAZIO;
   const x = u[modo]; if (x == null || !isFinite(x)) return VAZIO;
@@ -106,16 +109,17 @@ function cor(u, modo, q) {
   if (modo === "d22") return DIVD[[-.01, -.002, .002, .01].filter(t => x > t).length];
   return rampaDe(modo)[q.filter(t => x > t).length];
 }
-const fmt = (modo, x) => modo === "ap" || modo === "bp" ? pct(x, 2) : modo === "d22" ? pp(x, 2) : modo === "razao" ? dec(x, 0) : int(x);
+const fmt = (modo, x) => modo === "sint" ? pct(x, 0) : modo === "ap" || modo === "bp" ? pct(x, 2) : modo === "d22" ? pp(x, 2) : modo === "razao" ? dec(x, 0) : int(x);
 function legenda(modo, q) {
   if (modo === "mais") return [`${NB} com o dobro ou mais`, `${NB} teve mais votos`, "praticamente empatados", `${NA} teve mais votos`, `${NA} com o dobro ou mais`].map((t, i) => `<span><b style="background:${DIVREL[i]}"></b>${t}</span>`).join("") + `<span class="nota">(votos ${do_("a")} para ${CA.cargoNome.toLowerCase().replace(/^deputad[oa] /, "")} × votos ${do_("b")} para ${CB.cargoNome.toLowerCase().replace(/^deputad[oa] /, "")} no mesmo lugar)</span>`;
   if (modo === "rel") return [`${NB} bem mais forte`, `${NB} mais forte`, "equilibrado", `${NA} mais forte`, `${NA} bem mais forte`].map((t, i) => `<span><b style="background:${DIVREL[i]}"></b>${t}</span>`).join("") + `<span class="nota">(comparando o peso de cada lugar no total de cada um)</span>`;
+  if (modo === "cas" || modo === "sint") return rampaDe(modo).map((c, i) => `<span><b style="background:${c}"></b>${i === 0 ? "até " + fmt(modo, q[0]) : i === 4 ? "acima de " + fmt(modo, q[3]) : fmt(modo, q[i - 1]) + " a " + fmt(modo, q[i])}</span>`).join("") + `<span class="nota">${modo === "cas" ? "(votos casados: em cada escola, os votos que os dois tiveram juntos, o menor dos dois)" : "(sintonia: 100% = os dois com a mesma votação no mesmo lugar)"}</span>`;
   if (modo === "d22") return ["caiu mais de 1 p.p.", "caiu", "estável", "subiu", "subiu mais de 1 p.p."].map((t, i) => `<span><b style="background:${DIVD[i]}"></b>${t}</span>`).join("");
   return rampaDe(modo).map((c, i) => `<span><b style="background:${c}"></b>${i === 0 ? "até " + fmt(modo, q[0]) : i === 4 ? "acima de " + fmt(modo, q[3]) : fmt(modo, q[i - 1]) + " a " + fmt(modo, q[i])}</span>`).join("");
 }
 const duas = u => `<span class="duas"><i class="ba" style="width:${Math.min(100, (u.ap || 0) / E.maxAp * 100)}%"></i><i class="bb" style="width:${Math.min(100, (u.bp || 0) / E.maxBp * 100)}%"></i></span>`;
 function dica(u, tipo) {
-  return `<b>${esc(u.nome)}</b>${tipo ? ` <small style="color:${FAINT}">${tipo}</small>` : ""}<br><span style="color:${COR.a}">■</span> ${NA}: <b>${int(u.a)}</b> votos · ${pct(u.ap, 2)}<br><span style="color:${COR.b}">■</span> ${NB}: <b>${int(u.b)}</b> votos · ${pct(u.bp, 2)}<br><b>${u.a === u.b ? "Empate" : u.a > u.b ? `<span style="color:${COR.a}">${NA}</span> teve mais votos` : `<span style="color:${COR.b}">${NB}</span> teve mais votos`}</b> · ${razaoTxt()}: <b>${dec(u.razao, 0)}</b>${K22 && u.x22 ? `<br>${nm(K22)} em 2022: ${int(u.x22)} votos (${pp(u.d22, 2)})` : ""}`;
+  return `<b>${esc(u.nome)}</b>${tipo ? ` <small style="color:${FAINT}">${tipo}</small>` : ""}<br><span style="color:${COR.a}">■</span> ${NA}: <b>${int(u.a)}</b> votos · ${pct(u.ap, 2)}<br><span style="color:${COR.b}">■</span> ${NB}: <b>${int(u.b)}</b> votos · ${pct(u.bp, 2)}<br><b>${u.a === u.b ? "Empate" : u.a > u.b ? `<span style="color:${COR.a}">${NA}</span> teve mais votos` : `<span style="color:${COR.b}">${NB}</span> teve mais votos`}</b> · ${razaoTxt()}: <b>${dec(u.razao, 0)}</b><br><span style="color:${COR.c}">■</span> Votos casados: <b>${int(u.cas)}</b> · sintonia ${pct(u.sint, 0)}${K22 && u.x22 ? `<br>${nm(K22)} em 2022: ${int(u.x22)} votos (${pp(u.d22, 2)})` : ""}`;
 }
 
 /* ---------------- abertura: duelo e destaques */
@@ -131,6 +135,7 @@ function duelo() {
       <p class="mq">A cada <b class="cb">100 votos ${do_("b")}</b>, quantos ${C("a").art} <b class="ca">${NA}</b> teve?</p>
       ${[["Em Minas", mg.razao], ["Em BH", bh.razao]].map(([n, r]) => { const mx = Math.max(100, r || 0); return `<div class="mr"><span class="mn">${n}</span>
         <div class="mbs"><div class="mbl"><i class="bb" style="width:${100 / mx * 100}%"></i><em>${NB} 100</em></div><div class="mbl"><i class="ba" style="width:${(r || 0) / mx * 100}%"></i><em>${NA} ${dec(r, 0)}</em></div></div></div>`; }).join("")}
+      <p class="mq casou">Votos casados nas escolas de Minas: <b class="cc">${int(mg.cas)}</b><small>${pct(mg.cas / Math.min(mg.a, mg.b), 0)} dos votos ${do_(mg.a <= mg.b ? "a" : "b")} tiveram par ${do_(mg.a <= mg.b ? "b" : "a")} na mesma escola</small></p>
     </div>` +
     lado("b");
   animar($("#duelo"));
@@ -141,7 +146,11 @@ function destaques() {
   const regs = agrupar(ESC.filter(e => e.mun === BH), e => e.regional, null, "regional");
   const ra = regs.slice().sort((a, b) => b.ap - a.ap)[0], rb = regs.slice().sort((a, b) => b.bp - a.bp)[0];
   const c22 = K22 ? C(K22) : null;
+  const menor = mg.a <= mg.b ? "a" : "b", maior = menor === "a" ? "b" : "a";
+  const escsMG = ESC.filter(e => e.cas > 0), juntas = escsMG.filter(e => e.cas >= 10).length;
   $("#destaques").innerHTML = `
+    <div class="dest conv"><span class="dl">A dobradinha junta · Minas</span><b class="cc">${int(mg.cas)} votos casados</b><span>${pct(mg.cas / mg[menor], 0)} dos votos ${do_(menor)} tiveram par ${do_(maior)} na mesma escola · os dois votados em ${int(escsMG.length)} escolas (${int(juntas)} com 10+ casados)</span></div>
+    <div class="dest conv"><span class="dl">A dobradinha junta · BH</span><b class="cc">${int(bh.cas)} votos casados</b><span>sintonia de ${pct(bh.sint, 0)} nas escolas de BH · ${pct(bh.cas / bh[menor], 0)} dos votos ${do_(menor)} em BH tiveram par</span></div>
     <div class="dest"><span class="dl">Belo Horizonte · ${NA}</span><b class="ca">${int(bh.a)} votos</b><span>${pct(bh.ap, 2)} dos válidos para ${CA.cargoNome.toLowerCase().replace(/^deputad[oa] /, "")} · ${pct(bh.a / mg.a, 0)} de tudo que ${ele("a")} teve</span></div>
     <div class="dest"><span class="dl">Belo Horizonte · ${NB}</span><b class="cb">${int(bh.b)} votos</b><span>${pct(bh.bp, 2)} dos válidos para ${CB.cargoNome.toLowerCase().replace(/^deputad[oa] /, "")} · ${pct(bh.b / mg.b, 0)} de tudo que ${ele("b")} teve</span></div>
     <div class="dest"><span class="dl">Regional mais forte em BH</span><b><span class="ca">${esc(ra.nome)}</span> · <span class="cb">${esc(rb.nome)}</span></b><span>${NA} ${pct(ra.ap, 2)} · ${NB} ${pct(rb.bp, 2)}</span></div>
@@ -204,12 +213,17 @@ function cidade_(m, alvo) {
       <div class="kpi"><b class="cb">${int(u.b)}</b><span>votos ${do_("b")} · ${pct(u.bp, 2)} dos válidos · ${pct(u.sb, 1)} do total ${dele("b")}</span></div>
       <div class="kpi"><b>${dec(u.razao, 0)}</b><span>votos ${do_("a")} a cada 100 ${do_("b")}</span></div>
       ${K22 ? `<div class="kpi"><b class="${u.d22v >= 0 ? "pos" : "neg"}">${int(u.x22)} → ${int(u[K22])}</b><span>${nm(K22)} em 2022 → 2026 (${pp(u.d22, 2)})</span></div>` : ""}
+      <div class="kpi"><b class="cc">${int(u.cas)}</b><span>votos casados nas escolas · sintonia de ${pct(u.sint, 0)}</span></div>
       <div class="kpi"><b>${dec(r, 2)}</b><span>correlação entre os dois nas escolas (−1 a +1)</span></div>
     </div>
     <p class="insight">${osm && regA ? `Regional mais forte: <b class="ca">${esc(regA.nome)}</b> para ${o_("a")} (${pct(regA.ap, 2)}) e <b class="cb">${esc(regB.nome)}</b> para ${o_("b")} (${pct(regB.bp, 2)}). ` : ""}${bairA ? `Bairro mais forte: <b class="ca">${esc(bairA.nome)}</b> (${pct(bairA.ap, 2)}) e <b class="cb">${esc(bairB?.nome)}</b> (${pct(bairB?.bp, 2)}). ` : ""}Escola com mais votos: <b class="ca">${esc(topA.nome)}</b> (${int(topA.a)}) e <b class="cb">${esc(topB.nome)}</b> (${int(topB.b)}). ${Math.abs(r) < .2 ? "Os dois votam em lugares diferentes da cidade: a força de um quase não acompanha a do outro." : r > 0 ? "Onde um é forte, o outro tende a ser forte também: a dobradinha anda junta." : "Onde um é forte, o outro tende a ser mais fraco."}</p>
+    <div class="cab"><h3>Onde a dobradinha casou</h3><p>Escola por escola, quantos votos cada um teve e quanto casou: o menor dos dois é o máximo de eleitores que podem ter votado nos dois juntos. Quanto maior, mais o trabalho em equipe rendeu no mesmo lugar.</p></div>
+    <div class="grid2"><div class="card"><h4>Escolas com mais votos casados <small>${NA} · ${NB} · casados</small></h4>${rankC(escs, 15)}</div>
+      <div class="card"><h4>Bairros com mais votos casados <small>soma das escolas</small></h4>${rankC(bairros, 15)}</div></div>
+    ${osm ? `<div class="card" style="margin-top:14px"><h4>Regionais · votos casados e sintonia</h4><canvas id="g-cas-${id}" height="260"></canvas></div>` : ""}
     <div class="cab"><h3>Mapa${osm ? " de bairros, regionais e escolas" : " das escolas"}</h3></div>
     <div class="linha"><span class="rot">Mostrar</span><div class="seg" data-camada="${m}">${(osm ? [["bairro", "Bairros"], ["regional", "Regionais"], ["escola", "Escolas"]] : [["escola", "Escolas"]]).map(([k, n]) => `<button data-v="${k}" aria-pressed="${(E.camada[m] || (osm ? "bairro" : "escola")) === k}">${n}</button>`).join("")}</div></div>
-    <div class="linha"><span class="rot">Pintar por</span><div class="seg" data-modo="${m}">${MODOS.map(([k, n]) => `<button data-v="${k}" aria-pressed="${(E.modo[m] || "mais") === k}">${esc(n)}</button>`).join("")}</div></div>
+    <div class="linha"><span class="rot">Pintar por</span><div class="seg" data-modo="${m}">${MODOS.map(([k, n]) => `<button data-v="${k}" aria-pressed="${(E.modo[m] || "cas") === k}">${esc(n)}</button>`).join("")}</div></div>
     <div class="mapa-wrap"><div><div class="mapa" id="mapa-${id}"></div><div class="legenda" id="leg-${id}"></div></div><aside class="card lateral" id="lat-${id}"></aside></div>
     ${osm ? `<div class="cab"><h3>Por regional</h3></div>
     <div class="grid2"><div class="card"><h4>% dos válidos por regional <small>toque numa barra para ver no mapa</small></h4><canvas id="g-reg-${id}" height="300"></canvas></div><div class="card"><h4>De onde vieram os votos <small>parte do total da cidade em cada regional</small></h4><canvas id="g-regs-${id}" height="300"></canvas></div></div>
@@ -229,6 +243,8 @@ function cidade_(m, alvo) {
     grafico(`g-regs-${id}`, {type: "bar", data: {labels: regs.map(r => r.nome), datasets: [...dsAB(k => regs.map(r => r[k] / u[k] * 100), 5), {label: "Eleitores", data: regs.map(r => r.el / u.el * 100), backgroundColor: "rgba(223,233,239,.3)", borderRadius: 5}]},
       options: {indexAxis: "y", plugins: {tooltip: {callbacks: {label: c => `${c.dataset.label}: ${dec(c.raw, 1)}% do total da cidade`}}}, scales: {x: {grid: grade, title: {display: true, text: "% do total na cidade"}}, y: {grid: {display: false}}}}}, i => verNoMapa("regional", regs[i].chave, m));
   }
+  if (osm) grafico(`g-cas-${id}`, {type: "bar", data: {labels: regs.map(r => r.nome), datasets: [...dsAB(k => regs.map(r => r[k]), 4), {label: "Votos casados", data: regs.map(r => r.cas), backgroundColor: COR.c, borderRadius: 4}]},
+    options: {plugins: {tooltip: {callbacks: {label: c => `${c.dataset.label}: ${int(c.raw)} votos`, afterBody: it => `Sintonia: ${pct(regs[it[0].dataIndex].sint, 0)}`}}}, scales: {y: {grid: grade}, x: {grid: {display: false}}}}}, i => verNoMapa("regional", regs[i].chave, m));
   const mxE = Math.max(...escs.map(e => e.el));
   grafico(`g-disp-${id}`, {type: "bubble", data: {datasets: [{data: ws.map(e => ({x: e.bp * 100, y: e.ap * 100, r: 2 + 10 * Math.sqrt(e.el / mxE), nome: e.nome, bairro: e.bairro})), backgroundColor: ws.map(e => (e.rel > 0 ? hexA(COR.a, .6) : hexA(COR.b, .6))), borderColor: "rgba(223,233,239,.3)"}]},
     options: {plugins: {legend: {display: false}, tooltip: {callbacks: {label: c => `${c.raw.nome} (${c.raw.bairro}): ${NB} ${dec(c.raw.x, 2)}% · ${NA} ${dec(c.raw.y, 2)}%`}}}, scales: {x: {grid: grade, title: {display: true, text: `% ${do_("b")} (${CB.cargoNome.toLowerCase().replace(/^deputad[oa] /, "")})`}}, y: {grid: grade, title: {display: true, text: `% ${do_("a")} (${CA.cargoNome.toLowerCase().replace(/^deputad[oa] /, "")})`}}}}}, i => verNoMapa("escola", ws[i].chave, m));
@@ -242,6 +258,7 @@ const hexA = (h, a) => { const n = parseInt(h.slice(1), 16); return `rgba(${n >>
 
 /* ranking e tabela genéricos */
 const rank = (l, k, n) => `<ol class="rank">${l.slice().sort((a, b) => b[k] - a[k]).slice(0, n).map(u => `<li><button data-pop="${u.tipo}|${esc(u.chave)}|${u.escolas[0].mun}"><span>${esc(u.nome)}</span>${duas(u)}<b class="${k === "a" ? "ca" : "cb"}">${int(u[k])}</b></button></li>`).join("")}</ol>`;
+const rankC = (l, n) => `<ol class="rank">${l.filter(u => u.cas > 0).sort((a, b) => b.cas - a.cas || b.sint - a.sint).slice(0, n).map(u => `<li><button data-pop="${u.tipo}|${esc(u.chave)}|${u.escolas[0].mun}"><span>${esc(u.nome)}<i class="sint" style="--s:${Math.round((u.sint || 0) * 100)}%" title="sintonia ${pct(u.sint, 0)}"></i></span><b><span class="ca">${int(u.a)}</span> · <span class="cb">${int(u.b)}</span> · <span class="cc">${int(u.cas)}</span></b></button></li>`).join("") || "<li class='nota'>nenhum lugar com voto dos dois</li>"}</ol>`;
 function tabela(l, rot, id, comBairro) {
   E.tabs = E.tabs || {}; E.tabs[id] = {l, rot, comBairro};
   const o = E.ordem[id] || {k: "a", dir: -1}, filtro = semAc(E.filtro[id] || "");
@@ -254,8 +271,8 @@ function retabela(id) { const t = E.tabs[id]; const box = $(`[data-tab="${id}"]`
 document.addEventListener("click", e => {
   const th = e.target.closest("[data-ord]"); if (th) { const [id, k] = th.dataset.ord.split("|"); const o = E.ordem[id] || {k: "a", dir: -1}; E.ordem[id] = o.k === k ? {k, dir: -o.dir} : {k, dir: -1}; retabela(id); return; }
   const c = e.target.closest("[data-csv]"); if (c) { const t = E.tabs[c.dataset.csv];
-    const cab = [t.rot, ...(t.comBairro ? ["Bairro"] : []), "Eleitores", NA, NA + " % válidos", NB, NB + " % válidos", razaoTxt(), ...(K22 ? [nm(K22) + " 2022"] : [])];
-    const linhas = [cab.join(";")].concat(t.l.map(u => [u.nome, ...(t.comBairro ? [u.escolas[0].bairro] : []), u.el, u.a, dec(u.ap * 100, 3), u.b, dec(u.bp * 100, 3), dec(u.razao, 1), ...(K22 ? [u.x22] : [])].map(x => `"${String(x).replace(/"/g, '""')}"`).join(";")));
+    const cab = [t.rot, ...(t.comBairro ? ["Bairro"] : []), "Eleitores", NA, NA + " % válidos", NB, NB + " % válidos", "Votos casados", "Sintonia %", razaoTxt(), ...(K22 ? [nm(K22) + " 2022"] : [])];
+    const linhas = [cab.join(";")].concat(t.l.map(u => [u.nome, ...(t.comBairro ? [u.escolas[0].bairro] : []), u.el, u.a, dec(u.ap * 100, 3), u.b, dec(u.bp * 100, 3), u.cas, dec((u.sint || 0) * 100, 1), dec(u.razao, 1), ...(K22 ? [u.x22] : [])].map(x => `"${String(x).replace(/"/g, '""')}"`).join(";")));
     Object.assign(document.createElement("a"), {href: URL.createObjectURL(new Blob(["﻿" + linhas.join("\n")], {type: "text/csv"})), download: `${CF.slug}-${c.dataset.csv}.csv`}).click(); }
 });
 document.addEventListener("input", e => { const f = e.target.closest("[data-filtro]"); if (f) { E.filtro[f.dataset.filtro] = f.value; retabela(f.dataset.filtro); } });
@@ -273,7 +290,7 @@ async function mapaCidade(m) {
   L.tileLayer(TILES, {attribution: "Esri · OpenStreetMap · TSE", maxZoom: 17}).addTo(mapa);
   mapa.on("click focus", () => mapa.scrollWheelZoom.enable());
   E.mapas[id] = mapa;
-  const ctx = E.ctx[m], camada = E.camada[m] || (osm ? "bairro" : "escola"), modo = E.modo[m] || "mais";
+  const ctx = E.ctx[m], camada = E.camada[m] || (osm ? "bairro" : "escola"), modo = E.modo[m] || "cas";
   const lista = camada === "regional" ? ctx.regs : camada === "bairro" ? ctx.bairros : ctx.escs, q = quebras(lista.map(u => u[modo]));
   const porNome = new Map(lista.map(u => [u.nome, u])), grupo = L.featureGroup().addTo(mapa);
   if (osm && camada !== "escola") {
@@ -294,6 +311,8 @@ async function mapaCidade(m) {
   const ordenada = lista.filter(u => u[modo] != null && isFinite(u[modo])).sort((a, b) => b[modo] - a[modo]);
   const maisA = lista.filter(u => u.a > u.b).sort((a, b) => (b.a - b.b) - (a.a - a.b)), maisB = lista.filter(u => u.b > u.a).sort((a, b) => (b.b - b.a) - (a.b - a.a));
   const itemD = u => `<li><button data-pop="${u.tipo}|${esc(u.chave)}|${m}"><span>${esc(u.nome)}</span><b><span class="ca">${int(u.a)}</span> · <span class="cb">${int(u.b)}</span></b></button></li>`;
+  if (modo === "cas" || modo === "sint") { const lc = lista.filter(u => u.cas > 0 && (modo === "cas" || u.cas >= 10)).sort((a, b) => b[modo] - a[modo]);
+    $("#lat-" + id).innerHTML = `<h4>${modo === "cas" ? "Mais votos casados" : "Mais sintonia"} <small>${nomeC}${modo === "sint" ? " com 10+ casados" : ""}</small></h4><p class="nota">${NA} · ${NB} · <span class="cc">casados</span></p>${rankC(lc, 14)}`; return; }
   if (modo === "mais") { $("#lat-" + id).innerHTML = `<h4>Quem teve mais votos <small>${nomeC}</small></h4><p class="nota"><b class="ca">${int(maisA.length)}</b> ${nomeC} com mais ${NA} · <b class="cb">${int(maisB.length)}</b> com mais ${NB}</p><h4 class="ca" style="margin-top:12px">${NA} na frente</h4><ol class="rank">${maisA.slice(0, 10).map(itemD).join("") || "<li class='nota'>nenhum</li>"}</ol><h4 class="cb" style="margin-top:12px">${NB} na frente</h4><ol class="rank">${maisB.slice(0, 10).map(itemD).join("") || "<li class='nota'>nenhum</li>"}</ol>`; return; }
   $("#lat-" + id).innerHTML = modo === "rel"
     ? `<h4>Onde cada um pesa mais <small>${nomeC}</small></h4><p class="nota">Compara o peso de cada lugar no total de votos de cada candidato.</p><h4 class="ca" style="margin-top:12px">Mais ${NA}</h4><ol class="rank">${ordenada.filter(u => u.a + u.b > 20).slice(0, 10).map(itemD).join("")}</ol><h4 class="cb" style="margin-top:12px">Mais ${NB}</h4><ol class="rank">${ordenada.filter(u => u.a + u.b > 20).reverse().slice(0, 10).map(itemD).join("")}</ol>`
@@ -352,9 +371,11 @@ function minas() {
   const top = nivelMG("mun").slice().sort((a, b) => (b.a + b.b) - (a.a + a.b)).slice(0, 20);
   $("#p-minas").innerHTML = `<div class="cab"><h2>Minas Gerais</h2><p>Os dois em todo o estado: cidades, zonas eleitorais, macrorregiões, microrregiões e regiões do IBGE. Toque num lugar para ver os detalhes.</p></div>
     <div class="kpis"><div class="kpi"><b class="ca">${int(fora.a)}</b><span>votos ${do_("a")} fora de BH (${pct(fora.a / mg.a, 0)})</span></div><div class="kpi"><b class="cb">${int(fora.b)}</b><span>votos ${do_("b")} fora de BH (${pct(fora.b / mg.b, 0)})</span></div>
-      <div class="kpi"><b>${int(ri.a)} · ${int(ri.b)}</b><span>no resto da região de BH (${NA} · ${NB})</span></div><div class="kpi"><b>${int(nivelMG("mun").filter(c => c.a > 0).length)} · ${int(nivelMG("mun").filter(c => c.b > 0).length)}</b><span>cidades com voto (${NA} · ${NB})</span></div></div>
+      <div class="kpi"><b>${int(ri.a)} · ${int(ri.b)}</b><span>no resto da região de BH (${NA} · ${NB})</span></div><div class="kpi"><b>${int(nivelMG("mun").filter(c => c.a > 0).length)} · ${int(nivelMG("mun").filter(c => c.b > 0).length)}</b><span>cidades com voto (${NA} · ${NB})</span></div>
+      <div class="kpi"><b class="cc">${int(mg.cas)}</b><span>votos casados nas escolas de Minas · sintonia de ${pct(mg.sint, 0)}</span></div></div>
+    <div class="card" style="margin-bottom:14px"><h4>Cidades com mais votos casados <small>${NA} · ${NB} · casados · a bolinha mostra a sintonia</small></h4>${rankC(nivelMG("mun"), 20)}</div>
     <div class="linha"><span class="rot">Ver por</span><div class="seg" id="nivelMG">${Object.entries(NIV).map(([k, v]) => `<button data-n="${k}" aria-pressed="${k === nv}">${v[0]}</button>`).join("")}</div></div>
-    <div class="linha"><span class="rot">Pintar por</span><div class="seg" data-modo="mg">${MODOS.map(([k, n]) => `<button data-v="${k}" aria-pressed="${(E.modo.mg || "mais") === k}">${esc(n)}</button>`).join("")}</div></div>
+    <div class="linha"><span class="rot">Pintar por</span><div class="seg" data-modo="mg">${MODOS.map(([k, n]) => `<button data-v="${k}" aria-pressed="${(E.modo.mg || "cas") === k}">${esc(n)}</button>`).join("")}</div></div>
     <div class="mapa-wrap"><div><div class="mapa" id="mapa-mg"></div><div class="legenda" id="leg-mg"></div></div><aside class="card lateral" id="lat-mg"></aside></div>
     <div class="grid2" style="margin-top:14px"><div class="card"><h4>As 20 cidades com mais votos dos dois</h4><canvas id="g-topcid" height="420"></canvas></div><div class="card"><h4>Macrorregiões: % dos válidos</h4><canvas id="g-macro" height="420"></canvas></div></div>
     <div class="card" style="margin-top:14px">${tabela(l, NIV[nv][1], "mg-" + nv)}</div>`;
@@ -375,7 +396,7 @@ async function mapaMG() {
   const mapa = L.map(el, {scrollWheelZoom: false, preferCanvas: true, zoomSnap: .25}); E.mapas.mg = mapa;
   L.tileLayer(TILES, {attribution: "Esri · IBGE · TSE", maxZoom: 14}).addTo(mapa);
   mapa.on("click focus", () => mapa.scrollWheelZoom.enable());
-  const nv = E.nivelMG, modo = E.modo.mg || "mais", l = nivelMG(nv), nvMapa = nv === "zona" ? "mun" : nv, lm = nivelMG(nvMapa);
+  const nv = E.nivelMG, modo = E.modo.mg || "cas", l = nivelMG(nv), nvMapa = nv === "zona" ? "mun" : nv, lm = nivelMG(nvMapa);
   const unidadeDe = new Map(); for (const u of lm) for (const e of u.escolas) unidadeDe.set(e.mun, u);
   const ibgeMun = new Map(Object.entries(E.B.municipios).map(([m, x]) => [x.ibge, m])), q = quebras(lm.map(u => u[modo]));
   const grupo = L.featureGroup().addTo(mapa);
@@ -391,6 +412,8 @@ async function mapaMG() {
   $("#leg-mg").innerHTML = legenda(modo, nv === "zona" ? quebras(l.map(u => u[modo])) : q);
   const ord = l.filter(u => u[modo] != null && isFinite(u[modo]) && u.a + u.b > 30).sort((a, b) => b[modo] - a[modo]), mn = MODOS.find(x => x[0] === modo)[1];
   const item = u => `<li><button data-pop="${u.tipo}|${esc(u.chave)}|"><span>${esc(u.nome)}</span><b>${modo === "rel" ? int(u.a) + " · " + int(u.b) : fmt(modo, u[modo])}</b></button></li>`;
+  if (modo === "cas" || modo === "sint") { const lc = l.filter(u => u.cas > 0 && (modo === "cas" || u.cas >= 30)).sort((a, b) => b[modo] - a[modo]);
+    $("#lat-mg").innerHTML = `<h4>${modo === "cas" ? "Mais votos casados" : "Mais sintonia"} <small>${NIV[nv][0].toLowerCase()}${modo === "sint" ? " com 30+ casados" : ""}</small></h4><p class="nota">${NA} · ${NB} · <span class="cc">casados</span></p>${rankC(lc, 16)}`; return; }
   if (modo === "mais") { const ma = l.filter(u => u.a > u.b).sort((a, b) => (b.a - b.b) - (a.a - a.b)), mb = l.filter(u => u.b > u.a).sort((a, b) => (b.b - b.a) - (a.b - a.a)), it = u => `<li><button data-pop="${u.tipo}|${esc(u.chave)}|"><span>${esc(u.nome)}</span><b><span class="ca">${int(u.a)}</span> · <span class="cb">${int(u.b)}</span></b></button></li>`;
     $("#lat-mg").innerHTML = `<h4>Quem teve mais votos <small>${NIV[nv][0].toLowerCase()}</small></h4><p class="nota"><b class="ca">${int(ma.length)}</b> com mais ${NA} · <b class="cb">${int(mb.length)}</b> com mais ${NB}</p><h4 class="ca" style="margin-top:12px">${NA} na frente</h4><ol class="rank">${ma.slice(0, 12).map(it).join("") || "<li class='nota'>nenhum</li>"}</ol><h4 class="cb" style="margin-top:12px">${NB} na frente</h4><ol class="rank">${mb.slice(0, 12).map(it).join("") || "<li class='nota'>nenhum</li>"}</ol>`; return; }
   $("#lat-mg").innerHTML = modo === "rel" ? `<h4>Onde cada um pesa mais <small>${NIV[nv][0].toLowerCase()} com 30+ votos</small></h4><h4 class="ca" style="margin-top:10px">Mais ${NA}</h4><ol class="rank">${ord.slice(0, 12).map(item).join("")}</ol><h4 class="cb" style="margin-top:12px">Mais ${NB}</h4><ol class="rank">${ord.slice().reverse().slice(0, 12).map(item).join("")}</ol>`
@@ -417,9 +440,10 @@ function escolas() {
   const todas = ESC.map(e => Object.assign(derivar({...e, n: 1}), {nome: `${e.nome}`, tipo: "escola", chave: e.id, escolas: [e]})).filter(u => u.a + u.b > 0);
   todas.forEach(u => { u.nome = `${u.nome} — ${u.escolas[0].bairro} · ${MUN(u.escolas[0].mun).nome}`; });
   const ambos = todas.filter(u => u.a >= 20 && u.b >= 20).sort((a, b) => (b.ap + b.bp) - (a.ap + a.bp)).slice(0, 15);
-  $("#p-escolas").innerHTML = `<div class="cab"><h2>Escolas de Minas</h2><p>Todos os ${int(todas.length)} locais de votação onde pelo menos um dos dois teve voto. Use o filtro para achar uma escola, bairro ou cidade.</p></div>
+  $("#p-escolas").innerHTML = `<div class="cab"><h2>Escolas de Minas</h2><p>Todos os ${int(todas.length)} locais de votação onde pelo menos um dos dois teve voto, com quantos votos cada um teve e quanto casou. Use o filtro para achar uma escola, bairro ou cidade.</p></div>
     <div class="grid3"><div class="card"><h4><span class="ca">${NA}</span> · mais votos</h4>${rank(todas, "a", 12)}</div><div class="card"><h4><span class="cb">${NB}</span> · mais votos</h4>${rank(todas, "b", 12)}</div>
-      <div class="card"><h4>Onde a dobradinha foi forte <small>os dois com 20+ votos, maior % somado</small></h4><ol class="rank">${ambos.map(u => `<li><button data-pop="escola|${u.chave}|${u.escolas[0].mun}"><span>${esc(u.nome)}</span><b><span class="ca">${pct(u.ap, 1)}</span> · <span class="cb">${pct(u.bp, 1)}</span></b></button></li>`).join("")}</ol></div></div>
+      <div class="card"><h4><span class="cc">Mais votos casados</span> <small>${NA} · ${NB} · casados</small></h4>${rankC(todas, 12)}</div></div>
+    <div class="card" style="margin-top:14px"><h4>Onde a dobradinha foi forte em % <small>os dois com 20+ votos, maior % somado</small></h4><ol class="rank">${ambos.map(u => `<li><button data-pop="escola|${u.chave}|${u.escolas[0].mun}"><span>${esc(u.nome)}</span><b><span class="ca">${pct(u.ap, 1)}</span> · <span class="cb">${pct(u.bp, 1)}</span></b></button></li>`).join("")}</ol></div>
     <div class="card" style="margin-top:14px">${tabela(todas, "Escola", "todas")}</div>`;
   animar($("#p-escolas"));
 }
@@ -477,14 +501,15 @@ function acharUnidade(tipo, chave, mun) {
 function popover(u, ev) {
   const e0 = u.escolas[0], tipoN = {escola: "Escola", bairro: "Bairro", regional: "Regional"}[u.tipo] || NIV[u.tipo]?.[1] || "";
   const onde = u.tipo === "escola" ? `${e0.bairro} · ${MUN(e0.mun).nome}` : u.tipo === "bairro" || u.tipo === "regional" ? MUN(e0.mun).nome : "";
-  const top = u.escolas.length > 1 ? u.escolas.slice().sort((a, b) => (b.a + b.b) - (a.a + a.b)).slice(0, 6) : [];
+  const top = u.escolas.length > 1 ? u.escolas.slice().sort((a, b) => b.cas - a.cas || (b.a + b.b) - (a.a + a.b)).slice(0, 6) : [];
   const pop = $("#pop");
   const verK = `${u.tipo}|${u.chave}|${e0.mun}`;
   pop.innerHTML = `<button class="fechar" aria-label="Fechar">×</button><span class="selo-t">${tipoN}</span><h3>${esc(u.nome)}</h3><p class="nota">${esc(onde)}${onde ? " · " : ""}${int(u.el)} eleitores${u.n > 1 ? ` · ${int(u.n)} locais de votação` : ""}</p>
     <div class="pp"><div class="a"><small>${NA}</small><b class="ca">${int(u.a)}</b><small>${pct(u.ap, 2)} dos válidos · ${pct(u.sa, 2)} do total ${dele("a")}</small></div><div class="b"><small>${NB}</small><b class="cb">${int(u.b)}</b><small>${pct(u.bp, 2)} dos válidos · ${pct(u.sb, 2)} do total ${dele("b")}</small></div></div>
+    <div class="casou-pop"><b class="cc">${int(u.cas)}</b><span>votos casados${u.n > 1 ? " (soma das escolas)" : ""} · sintonia de <b>${pct(u.sint, 0)}</b><i class="sint" style="--s:${Math.round((u.sint || 0) * 100)}%"></i></span></div>
     <p class="nota">${razaoTxt()}: <b style="color:${FG}">${dec(u.razao, 0)}</b>${K22 ? ` · ${nm(K22)} em 2022: <b style="color:${FG}">${int(u.x22)}</b> (${pp(u.d22, 2)})` : ""} · ${esc(PART)} estadual: ${pct(u.apt, 0)} ${do_("a")} · ${esc(PART)} federal: ${pct(u.bpt, 0)} ${do_("b")}</p>
     <button class="btn prim ver" data-ver="${esc(verK)}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg> Ver no mapa</button>
-    ${top.length ? `<h4 style="margin-top:10px">Escolas com mais votos dos dois</h4><ol class="rank">${top.map(e => `<li><button data-pop="escola|${e.id}|${e.mun}"><span>${esc(e.nome)}</span><b><span class="ca">${int(e.a)}</span> · <span class="cb">${int(e.b)}</span></b></button></li>`).join("")}</ol>` : ""}`;
+    ${top.length ? `<h4 style="margin-top:10px">Escolas com mais votos casados</h4><ol class="rank">${top.map(e => `<li><button data-pop="escola|${e.id}|${e.mun}"><span>${esc(e.nome)}</span><b><span class="ca">${int(e.a)}</span> · <span class="cb">${int(e.b)}</span> · <span class="cc">${int(e.cas)}</span></b></button></li>`).join("")}</ol>` : ""}`;
   pop.hidden = false;
   const x = ev?.clientX ?? innerWidth / 2, y = ev?.clientY ?? innerHeight / 3, w = pop.offsetWidth, h = pop.offsetHeight;
   pop.style.left = Math.max(8, Math.min(innerWidth - w - 8, x + 14)) + "px"; pop.style.top = Math.max(8, Math.min(innerHeight - h - 8, y - 20)) + "px";
@@ -529,6 +554,7 @@ function escolher(x) {
   const ix = Object.fromEntries(B.campos.map((c, i) => [c, i]));
   ESC = B.escolas.map(r => ({id: r[ix.id], nome: r[ix.nome], mun: r[ix.mun], zona: r[ix.zona], bairro: r[ix.bairro] || "(sem bairro)", regional: r[ix.regional], lat: r[ix.lat], lng: r[ix.lng], el: r[ix.eleitores], comp: r[ix.comp],
     a: r[ix.a], b: r[ix.b], va: r[ix.va], vb: r[ix.vb], pa: r[ix.pa], pb: r[ix.pb], x22: r[ix.x22] || 0, vx22: r[ix.vx22] || 0}));
+  for (const e of ESC) e.cas = Math.min(e.a, e.b);
   TA = ESC.reduce((s, e) => s + e.a, 0); TB = ESC.reduce((s, e) => s + e.b, 0);
   const cidades = nivelMG("mun"); E.maxAp = Math.max(...cidades.filter(c => c.va > 5000).map(c => c.ap)); E.maxBp = Math.max(...cidades.filter(c => c.vb > 5000).map(c => c.bp));
   // título e textos da abertura vindos da configuração
@@ -539,6 +565,7 @@ function escolher(x) {
   const ok = CA.conferido && CB.conferido;
   $("#fontesTexto").innerHTML = `<p><b>2026:</b> arquivos oficiais do TSE de votação e de detalhe por seção (dados abertos), somados por local de votação (escola). ${ok ? `Os totais batem com o resultado oficial: ${NA} ${int(TA)} e ${NB} ${int(TB)} votos.` : `Totais somados: ${NA} ${int(TA)} e ${NB} ${int(TB)} votos.`}</p>
     <p><b>% dos válidos:</b> ${NA} sobre os votos válidos para ${CA.cargoNome.toLowerCase()}; ${NB} sobre os válidos para ${CB.cargoNome.toLowerCase()}. <b>${razaoTxt()}</b> compara os votos dos dois no mesmo lugar (cada eleitor vota nos dois cargos).</p>
+    <p><b>Votos casados e sintonia:</b> em cada escola, os votos casados são o menor dos dois (se ${NA} teve 40 e ${NB} 25 numa escola, casaram 25). Como o voto é secreto, é o máximo de eleitores que podem ter votado nos dois ali; num bairro, cidade ou região, é a soma das escolas. A sintonia é casados ÷ o maior dos dois: 100% quando os dois têm a mesma votação em cada escola.</p>
     <p><b>Peso no total de cada um:</b> compara o peso do lugar no total de cada um (a parte dos votos ${do_("a")} que veio dali contra a parte dos votos ${do_("b")}). Não depende do tamanho de cada votação.</p>
     <p><b>Peso no partido:</b> votos de cada um sobre todos os votos do ${esc(PART)} no mesmo cargo (nominais e de legenda).</p>
     ${K22 ? `<p><b>${nm(K22)} em 2022:</b> dados abertos do TSE por seção, ligados às escolas de 2026 pela zona e seção; em 2022 ${ele(K22)} concorreu pelo ${esc(C(K22).partido22)} e teve ${int(C(K22).votos22)} votos. ${nm(K22 === "a" ? "b" : "a")} não concorreu em 2022.</p>` : ""}
