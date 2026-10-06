@@ -1,0 +1,9 @@
+/* Wanderley Porto × Fred Costa — identidade MOBI misturada com a do Wanderley (laranja, grafite, creme, Archivo itálico) sobre o modelo genérico */
+:root{--bg:#1a2329;--bg2:#212d34;--card:#25333b;--card2:#2c3c45;--borda:rgba(248,233,202,.11);--borda2:rgba(248,233,202,.2);
+  --fg:#f7f2e8;--muted:#b8c3c8;--faint:#8796a0;--creme:#f8e9ca;--titulo:"Archivo",system-ui,sans-serif}
+body{background:radial-gradient(1100px 600px at 85% -10%,rgba(234,91,34,.16),transparent 60%),radial-gradient(900px 600px at -10% 10%,rgba(85,184,230,.12),transparent 60%),var(--bg)!important}
+h1,.cab h2,.cab h3,.nums b,.meio .xx,.meio b,.dest b,.kpi b,#pop h3,.pp b{font-style:italic!important;font-weight:900!important}
+.leaflet-container{background:#141c21}
+.controles{background:linear-gradient(var(--bg) 80%,rgba(26,35,41,0))}
+.pesq-in,.pesq-lista,.filtros select,.filtros input{background-color:#212d34!important}
+.kicker::before,.kicker::after{background:var(--a)!important}

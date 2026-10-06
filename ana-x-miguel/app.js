@@ -281,6 +281,8 @@ document.addEventListener("click", e => {
 document.addEventListener("input", e => { const f = e.target.closest("[data-filtro]"); if (f) { E.filtro[f.dataset.filtro] = f.value; retabela(f.dataset.filtro); } });
 
 /* mapa da cidade: bairros, regionais (contornos oficiais) e escolas */
+// redimensiona o mapa quando a caixa muda; para de vigiar quando o mapa é trocado (evita erro do Leaflet em mapa removido)
+function vigiarTamanho(mapa, el) { const ro = new ResizeObserver(() => { if (!mapa._loaded || !mapa._container || !document.body.contains(el)) { ro.disconnect(); return; } try { mapa.invalidateSize(); } catch (e) { ro.disconnect(); } }); ro.observe(el); mapa.on("unload", () => ro.disconnect()); }
 const TILES = "https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}";
 async function mapaCidade(m) {
   const id = "c" + m, el = $("#mapa-" + id); if (!el) return;
@@ -326,7 +328,7 @@ async function mapaCidade(m) {
       const mk = L.circleMarker([e.lat, e.lng], {radius: 3 + 9 * Math.sqrt(e.el / mx), color: BORDA_MAPA, weight: .8, fillOpacity: .92, fillColor: cor(u, modo, q)}).bindTooltip(dica(u, "escola · " + e.bairro), {sticky: true}).on("click", ev => popover(u, ev.originalEvent)).addTo(grupo); registrar(id, `escola|${u.chave}`, mk); }
   }
   const b = grupo.getBounds(); if (b.isValid()) mapa.fitBounds(b, {padding: [10, 10]});
-  new ResizeObserver(() => { mapa.invalidateSize(); }).observe(el);
+  vigiarTamanho(mapa, el);
   $("#leg-" + id).innerHTML = (camada === "secao" && (modoS === "cas" || modoS === "sint") ? [["#5b6b78", "nenhum casado"], ...SECPAL.map((c, i) => [c, modoS === "cas" ? ["1 a 2", "3 a 5", "6 a 10", "11 a 20", "mais de 20"][i] : ["até 25%", "25 a 50%", "50 a 75%", "75 a 90%", "acima de 90%"][i]])].map(([c, t]) => `<span><b style="background:${c}"></b>${t}</span>`).join("") : legenda(mq, q)) + (camada === "secao" ? `<span class="nota">(cada bolinha é uma seção, em volta da sua escola · aproxime o mapa${modoS !== modo ? " · nas seções este modo usa os votos casados" : ""})</span>` : camada === "zona" ? `<span class="nota">(cada círculo é uma zona eleitoral, no centro das suas escolas)</span>` : "");
   if (camada === "secao") { const k = ["a", "b"].includes(modoS) ? modoS : "cas"; $("#lat-" + id).innerHTML = `<h4>Seções ${k === "cas" ? "com mais votos casados" : "com mais votos " + do_(k)} <small>${int(secs.length)} seções</small></h4><p class="nota">${NA} · ${NB} · <span class="cc">casados</span></p>${rankS(secs, k, 14)}`; return; }
   const nomeC = {regional: "regionais", bairro: "bairros", escola: "escolas", zona: "zonas"}[camada], mn = MODOS.find(x => x[0] === modo)[1];
@@ -432,7 +434,7 @@ async function mapaMG() {
     for (const u of l) { const c = u.escolas.filter(e => e.lat != null); if (!c.length) continue; const t = c.reduce((a, e) => a + e.el, 0), lat = c.reduce((a, e) => a + e.lat * e.el, 0) / t, lng = c.reduce((a, e) => a + e.lng * e.el, 0) / t;
       const mk = L.circleMarker([lat, lng], {radius: 4 + 12 * Math.sqrt(u.el / mx), color: BORDA_MAPA, weight: 1, fillOpacity: .92, fillColor: cor(u, modo, qz)}).bindTooltip(dica(u, "zona"), {sticky: true}).on("click", ev => popover(u, ev.originalEvent)).addTo(grupo); registrar("mg", `zona|${u.chave}`, mk); }
   }
-  mapa.fitBounds(grupo.getBounds()); new ResizeObserver(() => mapa.invalidateSize()).observe(el);
+  mapa.fitBounds(grupo.getBounds()); vigiarTamanho(mapa, el);
   $("#leg-mg").innerHTML = legenda(modo, nv === "zona" ? quebras(l.map(u => u[modo])) : q);
   const ord = l.filter(u => u[modo] != null && isFinite(u[modo]) && u.a + u.b > 30).sort((a, b) => b[modo] - a[modo]), mn = MODOS.find(x => x[0] === modo)[1];
   const item = u => `<li><button data-pop="${u.tipo}|${esc(u.chave)}|"><span>${esc(u.nome)}</span><b>${modo === "rel" ? int(u.a) + " · " + int(u.b) : fmt(modo, u[modo])}</b></button></li>`;
@@ -456,7 +458,7 @@ async function mapaMGSecoes(mapa, el) {
       L.circleMarker([e.lat + raio * Math.sin(ang), e.lng + raio * Math.cos(ang) / Math.cos(e.lat * Math.PI / 180)], {radius: 2.6, color: "rgba(255,255,255,.35)", weight: .4, fillOpacity: .95, fillColor: corSec(x, modoS, q)})
         .bindTooltip(`<b>Seção ${x.n} · Zona ${x.zona}</b><br><small style="color:${FAINT}">${esc(e.nome)} · ${esc(MUN(e.mun).nome)}</small><br><span style="color:${COR.a}">■</span> ${NA}: <b>${int(x.a)}</b> · <span style="color:${COR.b}">■</span> ${NB}: <b>${int(x.b)}</b><br><span style="color:${COR.c}">■</span> Casados: <b>${int(x.cas)}</b> · sintonia ${pct(x.sint, 0)}`, {sticky: true})
         .on("click", ev => popover(acharUnidade("escola", String(i), e.mun), ev.originalEvent)).addTo(grupo); }); }
-  mapa.fitBounds(grupo.getBounds()); new ResizeObserver(() => mapa.invalidateSize()).observe(el);
+  mapa.fitBounds(grupo.getBounds()); vigiarTamanho(mapa, el);
   $("#leg-mg").innerHTML = (modoS === "cas" || modoS === "sint" ? [["#5b6b78", "nenhum casado"], ...SECPAL.map((c, i) => [c, modoS === "cas" ? ["1 a 2", "3 a 5", "6 a 10", "11 a 20", "mais de 20"][i] : ["até 25%", "25 a 50%", "50 a 75%", "75 a 90%", "acima de 90%"][i]])].map(([c, t]) => `<span><b style="background:${c}"></b>${t}</span>`).join("") : legenda(modoS, q)) + `<span class="nota">(cada bolinha é uma seção, em volta da sua escola · aproxime o mapa${modoS !== modo ? " · nas seções este modo usa os votos casados" : ""})</span>`;
   const k = ["a", "b"].includes(modoS) ? modoS : "cas";
   $("#lat-mg").innerHTML = `<h4>Seções ${k === "cas" ? "com mais votos casados" : "com mais votos " + do_(k)} <small>${int(SEC.length)} seções</small></h4><p class="nota">${NA} · ${NB} · <span class="cc">casados</span></p>${rankS(SEC, k, 16)}`;
@@ -647,7 +649,7 @@ async function mapaZonas(zonas) {
       .bindTooltip(`<b>Zona ${esc(z.chave)}</b> · ${esc(nomeZona(z.chave))}<br><span style="color:${COR.a}">■</span> ${NA}: <b>${int(z.a)}</b> · <span style="color:${COR.b}">■</span> ${NB}: <b>${int(z.b)}</b><br><span style="color:${COR.c}">■</span> Votos casados: <b>${int(z.cas)}</b> · sintonia ${pct(z.sint, 0)}`, {sticky: true})
       .on("click", () => abrirZona(z.chave)).addTo(gf);
     registrar("zonas", `zona|${z.chave}`, mk); E.zonaMk = E.zonaMk || {}; E.zonaMk[z.chave] = mk; }
-  mapa.fitBounds((zonas.length < todas.length ? gf : g).getBounds().pad(zonas.length < todas.length ? .25 : 0), {padding: [6, 6], maxZoom: 12}); new ResizeObserver(() => mapa.invalidateSize()).observe(el);
+  mapa.fitBounds((zonas.length < todas.length ? gf : g).getBounds().pad(zonas.length < todas.length ? .25 : 0), {padding: [6, 6], maxZoom: 12}); vigiarTamanho(mapa, el);
   $("#leg-zonas").innerHTML = legenda("cas", q) + `<span class="nota">(cada bolinha é uma zona · toque para abrir com as seções)</span>`;
 }
 async function desenharZona(z, u, escs) {
@@ -678,7 +680,7 @@ async function desenharZona(z, u, escs) {
   for (const x of escs) { const e = x.escolas[0]; if (e.lat == null) continue;
     const mk = L.circleMarker([e.lat, e.lng], {radius: 4 + 9 * Math.sqrt(e.el / mx), color: "#ffffff", weight: 1.2, opacity: .85, fillOpacity: .95, fillColor: cor(x, "cas", q)}).bindTooltip(dica(x, "escola · " + e.bairro), {sticky: true}).on("click", ev => popover(x, ev.originalEvent)).addTo(pts); registrar("zona", `escola|${x.chave}`, mk); }
   const b = (soCidade ? pts : area.getLayers().length ? area : pts).getBounds(); if (b.isValid()) mapa.fitBounds(b, {padding: [16, 16], maxZoom: 15});
-  new ResizeObserver(() => mapa.invalidateSize()).observe(el);
+  vigiarTamanho(mapa, el);
   $("#leg-zona").innerHTML = legenda("cas", q) + `<span class="nota">(${soCidade || osm.length ? "bairros e escolas da zona" : "municípios e escolas da zona"}, pelos votos casados · borda branca = escola)</span>`;
 }
 function zonaDetalhe(rolar) {
