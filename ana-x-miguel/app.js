@@ -18,7 +18,7 @@ const BH = "41238";
 const E = {aba: "bh", graficos: {}, mapas: {}, osm: {}, cidade: null, nivelMG: "mun", modo: {}, camada: {}, ordem: {}, filtro: {}};
 
 /* ---------------- configuração (preenchida a partir de base.json → cfg) */
-let CF, CA, CB, NA, NB, K22, PART, COR, DIVREL, MODOS, COLS, BGHEX = 0x0a1620;
+let CF, CA, CB, NA, NB, K22, PART, PA, PB, COR, DIVREL, MODOS, COLS, BGHEX = 0x0a1620;
 const DIVD = ["#e0574d", "#f2a197", "#7d8b96", "#a6e07a", "#88cc00"];
 const FUNDO = "#0a1620", BORDA_MAPA = "#0a1620", VAZIO = "#1a2c3a", FAINT = "#7b8b97", FG = "#f3f5f6";
 const C = k => k === "a" ? CA : CB;
@@ -29,7 +29,7 @@ const dele = k => C(k).art === "a" ? "dela" : "dele";
 const ele = k => C(k).pron;
 const razaoTxt = () => `${NA} a cada 100 ${do_("b")}`;
 function configurar(cfg) {
-  CF = cfg; CA = cfg.cand.a; CB = cfg.cand.b; NA = CA.curto; NB = CB.curto; K22 = cfg.ano22; PART = cfg.partido;
+  CF = cfg; CA = cfg.cand.a; CB = cfg.cand.b; NA = CA.curto; NB = CB.curto; K22 = cfg.ano22; PART = cfg.partido; PA = CA.partido || PART; PB = CB.partido || PART;   // partido de cada um (a dobradinha pode juntar partidos diferentes)
   BGHEX = parseInt(cfg.paleta.bg.slice(1), 16);
   COR = {a: CA.cor, b: CB.cor, neutro: cfg.paleta.neutro, ok: "#88cc00", neg: "#ff7a6b", c: "#88cc00"};
   DIVREL = cfg.paleta.escala;
@@ -38,7 +38,7 @@ function configurar(cfg) {
   MODOS = [["cas", "Votos casados"], ["sint", "Sintonia"], ["mais", "Quem teve mais votos"], ["rel", "Peso no total de cada um"], ["ap", NA + " %"], ["bp", NB + " %"], ["a", NA + " votos"], ["b", NB + " votos"], ["razao", razaoTxt()]];
   if (K22) MODOS.push(["d22", `${nm(K22)} 2022 → 2026`]);
   COLS = [["el", "Eleitores", int], ["a", NA, int, "ta"], ["ap", "% válidos", x => pct(x, 2), "ta"], ["sa", "% do total " + dele("a"), x => pct(x, 2), "ta"], ["b", NB, int, "tb"], ["bp", "% válidos", x => pct(x, 2), "tb"], ["sb", "% do total " + dele("b"), x => pct(x, 2), "tb"],
-    ["cas", "Casados", int, "tc"], ["sint", "Sintonia", x => pct(x, 0), "tc"], ["razao", `${CA.ini} a cada 100 ${CB.ini}`, x => dec(x, 0)], ["apt", `% do ${PART} (est.)`, x => pct(x, 0), "ta"], ["bpt", `% do ${PART} (fed.)`, x => pct(x, 0), "tb"]];
+    ["cas", "Casados", int, "tc"], ["sint", "Sintonia", x => pct(x, 0), "tc"], ["razao", `${CA.ini} a cada 100 ${CB.ini}`, x => dec(x, 0)], ["apt", `% do ${PA} (est.)`, x => pct(x, 0), "ta"], ["bpt", `% do ${PB} (fed.)`, x => pct(x, 0), "tb"]];
   if (K22) COLS.push(["x22", nm(K22) + " 2022", int, "t" + K22], ["d22", "Δ " + nm(K22), x => `<span class="${x > 0 ? "pos" : "neg"}">${pp(x, 2)}</span>`, "t" + K22]);
   Chart.defaults.color = "#a9b8c4"; Chart.defaults.font.family = "Inter Tight, system-ui, sans-serif"; Chart.defaults.borderColor = "rgba(223,233,239,.08)";
 }
@@ -136,7 +136,7 @@ function duelo() {
       <p class="mq">A cada <b class="cb">100 votos ${do_("b")}</b>, quantos ${C("a").art} <b class="ca">${NA}</b> teve?</p>
       ${[["Em Minas", mg.razao], ["Em BH", bh.razao]].map(([n, r]) => { const mx = Math.max(100, r || 0); return `<div class="mr"><span class="mn">${n}</span>
         <div class="mbs"><div class="mbl"><i class="bb" style="width:${100 / mx * 100}%"></i><em>${NB} 100</em></div><div class="mbl"><i class="ba" style="width:${(r || 0) / mx * 100}%"></i><em>${NA} ${dec(r, 0)}</em></div></div></div>`; }).join("")}
-      <p class="mq casou">Votos casados nas escolas de Minas: <b class="cc">${int(mg.cas)}</b><small>${pct(mg.cas / Math.min(mg.a, mg.b), 0)} dos votos ${do_(mg.a <= mg.b ? "a" : "b")} tiveram par ${do_(mg.a <= mg.b ? "b" : "a")} na mesma escola</small></p>
+      <p class="mq casou">Votos casados nas escolas de Minas: <b class="cc">${int(mg.cas)}</b><small>${pct(mg.cas / Math.min(mg.a, mg.b), 0)} dos votos ${do_(mg.a <= mg.b ? "a" : "b")} tiveram par ${do_(mg.a <= mg.b ? "b" : "a")} na mesma seção</small></p>
     </div>` +
     lado("b");
   animar($("#duelo"));
@@ -150,14 +150,14 @@ function destaques() {
   const menor = mg.a <= mg.b ? "a" : "b", maior = menor === "a" ? "b" : "a";
   const escsMG = ESC.filter(e => e.cas > 0), juntas = escsMG.filter(e => e.cas >= 10).length;
   $("#destaques").innerHTML = `
-    <div class="dest conv"><span class="dl">A dobradinha junta · Minas</span><b class="cc">${int(mg.cas)} votos casados</b><span>${pct(mg.cas / mg[menor], 0)} dos votos ${do_(menor)} tiveram par ${do_(maior)} na mesma escola · os dois votados em ${int(escsMG.length)} escolas (${int(juntas)} com 10+ casados)</span></div>
+    <div class="dest conv"><span class="dl">A dobradinha junta · Minas</span><b class="cc">${int(mg.cas)} votos casados</b><span>${pct(mg.cas / mg[menor], 0)} dos votos ${do_(menor)} tiveram par ${do_(maior)} na mesma seção · os dois votados em ${int(escsMG.length)} escolas (${int(juntas)} com 10+ casados)</span></div>
     <div class="dest conv"><span class="dl">A dobradinha junta · BH</span><b class="cc">${int(bh.cas)} votos casados</b><span>sintonia de ${pct(bh.sint, 0)} nas escolas de BH · ${pct(bh.cas / bh[menor], 0)} dos votos ${do_(menor)} em BH tiveram par</span></div>
     <div class="dest"><span class="dl">Belo Horizonte · ${NA}</span><b class="ca">${int(bh.a)} votos</b><span>${pct(bh.ap, 2)} dos válidos para ${CA.cargoNome.toLowerCase().replace(/^deputad[oa] /, "")} · ${pct(bh.a / mg.a, 0)} de tudo que ${ele("a")} teve</span></div>
     <div class="dest"><span class="dl">Belo Horizonte · ${NB}</span><b class="cb">${int(bh.b)} votos</b><span>${pct(bh.bp, 2)} dos válidos para ${CB.cargoNome.toLowerCase().replace(/^deputad[oa] /, "")} · ${pct(bh.b / mg.b, 0)} de tudo que ${ele("b")} teve</span></div>
     <div class="dest"><span class="dl">Regional mais forte em BH</span><b><span class="ca">${esc(ra.nome)}</span> · <span class="cb">${esc(rb.nome)}</span></b><span>${NA} ${pct(ra.ap, 2)} · ${NB} ${pct(rb.bp, 2)}</span></div>
     <div class="dest"><span class="dl">Cidades com voto</span><b><span class="ca">${int(soA)}</span> · <span class="cb">${int(soB)}</span></b><span>${NA} · ${NB} · os dois juntos em ${int(ambos)} cidades</span></div>
     ${c22 ? `<div class="dest"><span class="dl">${nm(K22)} · 2022 → 2026</span><b class="${c22.votos >= c22.votos22 ? "pos" : "neg"}">${int(c22.votos22)} → ${int(c22.votos)}</b><span>${c22.votos >= c22.votos22 ? "+" : ""}${pct(c22.votos / c22.votos22 - 1)} · em 2022 pelo ${esc(c22.partido22)}</span></div>` : ""}
-    <div class="dest"><span class="dl">Peso no partido (${esc(PART)})</span><b><span class="ca">${pct(mg.apt, 0)}</span> · <span class="cb">${pct(mg.bpt, 0)}</span></b><span>dos votos do ${esc(PART)} para estadual · para federal, em Minas</span></div>`;
+    <div class="dest"><span class="dl">Peso no partido${PA === PB ? ` (${esc(PA)})` : ""}</span><b><span class="ca">${pct(mg.apt, 0)}</span> · <span class="cb">${pct(mg.bpt, 0)}</span></b><span>${PA === PB ? `dos votos do ${esc(PA)} para estadual · para federal, em Minas` : `dos votos do ${esc(PA)} para estadual · dos votos do ${esc(PB)} para federal, em Minas`}</span></div>`;
   animar($("#destaques"));
 }
 
@@ -727,7 +727,7 @@ function analises() {
     <div class="grid2"><div class="card"><h4>Concentração do voto <small>% acumulado dos votos × número de escolas (das que mais deram votos para as que menos)</small></h4><canvas id="g-lorenz" height="300"></canvas></div>
       <div class="card"><h4>De onde vêm os votos</h4><canvas id="g-dep" height="300"></canvas></div></div>
     <div class="grid2" style="margin-top:14px"><div class="card"><h4>Por tamanho da cidade <small>% dos válidos</small></h4><canvas id="g-fx" height="300"></canvas></div>
-      ${K22 ? `<div class="card"><h4>${nm(K22)} · 2022 × 2026 por macrorregião <small>votos</small></h4><canvas id="g-x22" height="300"></canvas></div>` : `<div class="card"><h4>Peso no ${esc(PART)} por macrorregião <small>% dos votos do partido em cada cargo</small></h4><canvas id="g-x22" height="300"></canvas></div>`}</div>
+      ${K22 ? `<div class="card"><h4>${nm(K22)} · 2022 × 2026 por macrorregião <small>votos</small></h4><canvas id="g-x22" height="300"></canvas></div>` : `<div class="card"><h4>Peso no ${PA === PB ? esc(PA) : "partido"} por macrorregião <small>% dos votos do partido em cada cargo</small></h4><canvas id="g-x22" height="300"></canvas></div>`}</div>
     <div class="grid2" style="margin-top:14px"><div class="card"><h4>BH · votos ${do_("a")} a cada 100 ${do_("b")}, por regional</h4><canvas id="g-raz" height="300"></canvas></div>
       <div class="card"><h4>BH · as escolas em 4 grupos <small>acima ou abaixo da mediana de cada um</small></h4><canvas id="g-quad" height="300"></canvas>
       <p class="nota">${int(quad[0])} escolas fortes para os dois · ${int(quad[1])} só ${NA} · ${int(quad[2])} só ${NB} · ${int(quad[3])} fracas para os dois.</p></div></div>`;
@@ -741,7 +741,7 @@ function analises() {
   if (K22) grafico("g-x22", {type: "bar", data: {labels: me.map(c => c.nome), datasets: [{label: nm(K22) + " 2022", data: me.map(c => c.x22), backgroundColor: hexA(COR[K22], .35), borderRadius: 4}, {label: nm(K22) + " 2026", data: me.map(c => c[K22]), backgroundColor: COR[K22], borderRadius: 4}]},
     options: {indexAxis: "y", plugins: {tooltip: {callbacks: {label: c => `${c.dataset.label}: ${int(c.raw)} votos`}}}, scales: {x: {grid: grade}, y: {grid: {display: false}}}}}, i => verNoMapa("me", me[i].chave, ""));
   else grafico("g-x22", {type: "bar", data: {labels: me.map(c => c.nome), datasets: dsAB(k => me.map(c => c[k + "pt"] * 100))},
-    options: {indexAxis: "y", plugins: {tooltip: {callbacks: {label: c => `${c.dataset.label}: ${dec(c.raw, 1)}% do ${PART}`}}}, scales: {x: {grid: grade}, y: {grid: {display: false}}}}}, i => verNoMapa("me", me[i].chave, ""));
+    options: {indexAxis: "y", plugins: {tooltip: {callbacks: {label: c => `${c.dataset.label}: ${dec(c.raw, 1)}% do ${c.datasetIndex === 0 ? PA : PB}`}}}, scales: {x: {grid: grade}, y: {grid: {display: false}}}}}, i => verNoMapa("me", me[i].chave, ""));
   grafico("g-raz", {type: "bar", data: {labels: regs.map(r => r.nome), datasets: [{label: razaoTxt(), data: regs.map(r => r.razao), backgroundColor: regs.map(r => r.razao >= 100 ? COR.a : COR.b), borderRadius: 4}]},
     options: {indexAxis: "y", plugins: {legend: {display: false}, tooltip: {callbacks: {label: c => `${dec(c.raw, 0)} votos ${do_("a")} a cada 100 ${do_("b")}`}}}, scales: {x: {grid: grade}, y: {grid: {display: false}}}}}, i => verNoMapa("regional", regs[i].chave, BH));
   grafico("g-quad", {type: "doughnut", data: {labels: ["Fortes para os dois", "Só " + NA, "Só " + NB, "Fracas para os dois"], datasets: [{data: quad, backgroundColor: [COR.neutro, COR.a, COR.b, "#2c4152"], borderColor: "#112331", borderWidth: 3}]}, options: {plugins: {legend: {position: "right"}}}});
@@ -772,7 +772,7 @@ function popover(u, ev) {
   pop.innerHTML = `<button class="fechar" aria-label="Fechar">×</button><span class="selo-t">${tipoN}</span><h3>${esc(u.nome)}</h3><p class="nota">${esc(onde)}${onde ? " · " : ""}${int(u.el)} eleitores${u.n > 1 ? ` · ${int(u.n)} locais de votação` : ""}</p>
     <div class="pp"><div class="a"><small>${NA}</small><b class="ca">${int(u.a)}</b><small>${pct(u.ap, 2)} dos válidos · ${pct(u.sa, 2)} do total ${dele("a")}</small></div><div class="b"><small>${NB}</small><b class="cb">${int(u.b)}</b><small>${pct(u.bp, 2)} dos válidos · ${pct(u.sb, 2)} do total ${dele("b")}</small></div></div>
     <div class="casou-pop"><b class="cc">${int(u.cas)}</b><span>votos casados${u.n > 1 ? " (soma das escolas)" : ""} · sintonia de <b>${pct(u.sint, 0)}</b><i class="sint" style="--s:${Math.round((u.sint || 0) * 100)}%"></i></span></div>
-    <p class="nota">${razaoTxt()}: <b style="color:${FG}">${dec(u.razao, 0)}</b>${K22 ? ` · ${nm(K22)} em 2022: <b style="color:${FG}">${int(u.x22)}</b> (${pp(u.d22, 2)})` : ""} · ${esc(PART)} estadual: ${pct(u.apt, 0)} ${do_("a")} · ${esc(PART)} federal: ${pct(u.bpt, 0)} ${do_("b")}</p>
+    <p class="nota">${razaoTxt()}: <b style="color:${FG}">${dec(u.razao, 0)}</b>${K22 ? ` · ${nm(K22)} em 2022: <b style="color:${FG}">${int(u.x22)}</b> (${pp(u.d22, 2)})` : ""} · ${esc(PA)} estadual: ${pct(u.apt, 0)} ${do_("a")} · ${esc(PB)} federal: ${pct(u.bpt, 0)} ${do_("b")}</p>
     ${u.tipo === "escola" ? `<div class="secoes" id="secoesPop"><p class="nota">Carregando as seções…</p></div>` : ""}
     <button class="btn prim ver" data-ver="${esc(verK)}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg> Ver no mapa</button>
     ${top.length ? `<h4 style="margin-top:10px">Escolas com mais votos casados</h4><ol class="rank">${top.map(e => `<li><button data-pop="escola|${e.id}|${e.mun}"><span>${esc(e.nome)}</span><b><span class="ca">${int(e.a)}</span> · <span class="cb">${int(e.b)}</span> · <span class="cc">${int(e.cas)}</span></b></button></li>`).join("")}</ol>` : ""}`;
@@ -865,7 +865,7 @@ new MutationObserver(() => document.querySelectorAll("select:not([data-pesq])").
     <p><b>% dos válidos:</b> ${NA} sobre os votos válidos para ${CA.cargoNome.toLowerCase()}; ${NB} sobre os válidos para ${CB.cargoNome.toLowerCase()}. <b>${razaoTxt()}</b> compara os votos dos dois no mesmo lugar (cada eleitor vota nos dois cargos).</p>
     <p><b>Votos casados e sintonia:</b> contados em cada seção eleitoral (urna), o menor nível que o TSE publica: se numa seção ${NA} teve 40 votos e ${NB} 25, casaram 25. Como o voto é secreto, é o máximo de eleitores daquela urna que podem ter votado nos dois; na escola, no bairro, na cidade e na região, é a soma das seções. A sintonia é casados ÷ o maior dos dois: 100% quando os dois têm a mesma votação em cada escola.</p>
     <p><b>Peso no total de cada um:</b> compara o peso do lugar no total de cada um (a parte dos votos ${do_("a")} que veio dali contra a parte dos votos ${do_("b")}). Não depende do tamanho de cada votação.</p>
-    <p><b>Peso no partido:</b> votos de cada um sobre todos os votos do ${esc(PART)} no mesmo cargo (nominais e de legenda).</p>
+    <p><b>Peso no partido:</b> votos de cada um sobre todos os votos do próprio partido no mesmo cargo (${PA === PB ? esc(PA) : `${esc(PA)} para ${NA}, ${esc(PB)} para ${NB}`}) (nominais e de legenda).</p>
     ${K22 ? `<p><b>${nm(K22)} em 2022:</b> dados abertos do TSE por seção, ligados às escolas de 2026 pela zona e seção; em 2022 ${ele(K22)} concorreu pelo ${esc(C(K22).partido22)} e teve ${int(C(K22).votos22)} votos. ${nm(K22 === "a" ? "b" : "a")} não concorreu em 2022.</p>` : ""}
     <p><b>Bairros e regionais:</b> contornos oficiais do OpenStreetMap nas cidades onde estão mapeados (${B.cidadesOSM.map(m => MUN(m).nome).join(", ")}). Nas outras cidades, o bairro é o do cadastro do TSE.</p>`;
   const h = location.hash.slice(1); irAba(["bh", "cidades", "minas", "escolas", "secoes", "analises"].includes(h) ? h : "bh", false);

@@ -3,20 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ana Paula Siqueira × Rogério Correia · 2026 · MOBI</title>
-<meta name="description" content="Comparação entre Ana Paula Siqueira (Deputada Estadual) e Rogério Correia (Deputado Federal) nas Eleições 2026 em Minas Gerais: Belo Horizonte por regional, bairro e escola, cidades, regiões e zonas. Dados oficiais do TSE.">
+<title>Ana Paula Siqueira × Samuel Viana · 2026 · MOBI</title>
+<meta name="description" content="Comparação entre Ana Paula Siqueira (Deputada Estadual) e Samuel Viana (Deputado Federal) nas Eleições 2026 em Minas Gerais: Belo Horizonte por regional, bairro e escola, cidades, regiões e zonas. Dados oficiais do TSE.">
 <meta name="robots" content="noindex">
 <meta name="theme-color" content="#0a1620">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="MOBI · Mobilização Inteligente">
-<meta property="og:title" content="Ana Paula Siqueira × Rogério Correia · Eleições 2026">
-<meta property="og:description" content="A dobradinha do PT em Belo Horizonte e em Minas: regional por regional, bairro por bairro, escola por escola. Dados oficiais do TSE.">
-<meta property="og:image" content="https://resultado.mobinteligente.com.br/ana-x-rogerio/og.jpg">
+<meta property="og:title" content="Ana Paula Siqueira × Samuel Viana · Eleições 2026">
+<meta property="og:description" content="A dobradinha em Belo Horizonte e em Minas: regional por regional, bairro por bairro, escola por escola. Dados oficiais do TSE.">
+<meta property="og:image" content="https://resultado.mobinteligente.com.br/ana-x-samuel/og.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:url" content="https://resultado.mobinteligente.com.br/ana-x-rogerio/">
+<meta property="og:url" content="https://resultado.mobinteligente.com.br/ana-x-samuel/">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:image" content="https://resultado.mobinteligente.com.br/ana-x-rogerio/og.jpg">
+<meta name="twitter:image" content="https://resultado.mobinteligente.com.br/ana-x-samuel/og.jpg">
 <link rel="icon" type="image/jpeg" href="marca/mobi-simbolo-64.png">
 <link rel="preload" href="marca/Unbounded-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
@@ -30,8 +30,8 @@
   </header>
 
   <section class="hero">
-    <div class="kicker" id="kicker">Dobradinha PT · Eleições 2026 · Minas Gerais</div>
-    <h1 id="titulo"><span class="na">Ana Paula Siqueira</span> <span class="x">×</span> <span class="nb">Rogério Correia</span></h1>
+    <div class="kicker" id="kicker">Dobradinha PT e UNIÃO · Eleições 2026 · Minas Gerais</div>
+    <h1 id="titulo"><span class="na">Ana Paula Siqueira</span> <span class="x">×</span> <span class="nb">Samuel Viana</span></h1>
     <p class="lead" id="lead">A comparação completa entre o voto da deputada estadual e do deputado federal em 2026: Belo Horizonte regional por regional, bairro por bairro e escola por escola, as cidades com regionais e todo o estado.</p>
     <div class="duelo" id="duelo"><div class="carregando">Carregando os dados oficiais…</div></div>
   </section>
@@ -44,6 +44,7 @@
       <button role="tab" data-aba="cidades" aria-selected="false">Cidades com regionais</button>
       <button role="tab" data-aba="minas" aria-selected="false">Minas Gerais</button>
       <button role="tab" data-aba="escolas" aria-selected="false">Escolas</button>
+      <button role="tab" data-aba="secoes" aria-selected="false">Seções e zonas</button>
       <button role="tab" data-aba="secoes" aria-selected="false">Seções e zonas</button>
       <button role="tab" data-aba="analises" aria-selected="false">Análises</button>
     </nav>
@@ -59,6 +60,7 @@
   </section>
   <section class="painel" id="p-minas" hidden></section>
   <section class="painel" id="p-escolas" hidden></section>
+  <section class="painel" id="p-secoes" hidden></section>
   <section class="painel" id="p-secoes" hidden></section>
   <section class="painel" id="p-analises" hidden></section>
 
