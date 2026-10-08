@@ -184,3 +184,19 @@ tbody tr[data-lugar]:hover{background:rgba(85,184,230,.08)}
 @media (hover:none){.ver-mapa .t{max-width:90px}.ver-mapa{gap:5px}}
 @media print{.anim{opacity:1!important;animation:none!important}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}.anim{opacity:1!important;transform:none!important}}
+
+/* filtro por região (Presidente · Regiões e estados) */
+.filtro-reg{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 16px;padding:12px 14px;border:1px solid var(--border2);border-radius:14px;background:rgba(255,255,255,.03)}
+.filtro-reg .rot,.modos .rot{font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.filtro-reg .seg button{font-size:15px;padding:8px 14px}
+.reg-cands{grid-template-columns:repeat(auto-fill,minmax(220px,1fr));margin-bottom:12px}@media(max-width:560px){.reg-cands{grid-template-columns:1fr 1fr;gap:8px}.reg-cand{padding:10px 12px}.reg-cand .reg-pct{font-size:21px!important}.reg-cand b{font-size:13px!important}.reg-cand small{font-size:11px}}
+.reg-cand{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;border-top:4px solid var(--c);cursor:pointer;color:inherit}
+.reg-cand.ativo{box-shadow:inset 0 0 0 2px var(--c);background:rgba(255,255,255,.09)}.reg-cand b{font-size:15px}.reg-cand .reg-pct{font-size:26px;font-weight:800;color:var(--c)}.reg-cand small{color:var(--muted)}
+.reg-listas{grid-template-columns:repeat(2,minmax(0,1fr));margin:14px 0}@media(max-width:760px){.reg-listas{grid-template-columns:1fr}}
+.reg-listas h2{font-size:19px;margin-bottom:8px}.reg-listas h2 .nota{display:block;font-size:12px;font-weight:500;letter-spacing:0;text-transform:none;margin-top:2px}
+.rank-reg{list-style:none;margin:0;padding:0;counter-reset:r}
+.rank-reg li{counter-increment:r;display:flex;justify-content:space-between;gap:8px;align-items:center;padding:7px 2px;border-bottom:1px solid var(--border2);font-size:14px;cursor:pointer}
+.rank-reg li::before{content:counter(r);color:var(--muted);width:22px;font-size:12px;flex:none}
+.rank-reg li > span{flex:1;min-width:0}.rank-reg li small{color:var(--muted)}.rank-reg li:hover{background:rgba(255,255,255,.05)}
+.rank-reg b.pos,h2.pos{color:#5fd08a}.rank-reg b.neg,h2.neg{color:#f08a7e}
+#tabRegCid td.pos{color:#5fd08a}#tabRegCid td.neg{color:#f08a7e}

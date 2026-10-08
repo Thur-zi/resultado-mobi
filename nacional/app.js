@@ -694,16 +694,92 @@ async function viewTodos(main) {
 }
 
 /* ---------- regiões e estados (tabela) */
+/* ---------- Presidente por região: filtro Brasil / Norte / Nordeste / …, mapa só da região (cidade por cidade) e as cidades onde
+   cada candidato mais venceu e mais perdeu. Usa os boletins por município de cada estado da região (o mesmo dado da aba Cidades). */
+N.regModo = "lider"; N.regCand = null;
+const regAtual = () => ehRegiao(N.escopo) ? N.escopo.slice(2) : "";   // o filtro é o próprio escopo "r:<região>" (vai no link)
+function filtroRegioes() {
+  const atual = regAtual();
+  return `<div class="filtro-reg"><span class="rot">Filtrar por região</span><div class="seg">${[["", "Brasil"], ...Object.keys(REGIOES).map(r => [r, r])]
+    .map(([k, n]) => `<button data-reg-f="${k}" aria-pressed="${atual === k}">${n}</button>`).join("")}</div></div>`;
+}
+async function viewRegiao(main, reg) {
+  const t = N.tok, ufs = REGIOES[reg];
+  main.innerHTML = filtroRegioes() + `<div class="vazio">Carregando as cidades da região ${esc(reg)}…</div>`;
+  const [ms, gs, gbr] = await Promise.all([Promise.all(ufs.map(u => areasMunicipios(u, 1).catch(() => null))), Promise.all(ufs.map(u => geoUF(u).catch(() => null))), geoBR()]);
+  if (!vivo(t)) return;
+  const areas = new Map(), nomes = new Map(), feats = [];
+  for (const m of ms) if (m) { for (const [ib, a] of m.areas) areas.set(ib, a); for (const [n, c] of m.nomes) nomes.set(n, c); }
+  for (const g of gs) if (g) feats.push(...g.features);
+  const r = resumoEscopo(1, "r:" + reg) || {candidatos: []}, cores = coresDe(N.D?.brasil), top = (r.candidatos || []).slice(0, 6);
+  if (N.regCand == null || !top.some(c => c.n === N.regCand)) N.regCand = top[0]?.n;
+  const nomeDe = n => nome(nomes.get(n)?.nomeUrna || top.find(c => c.n === n)?.nome || "");
+  const corDe = n => cores.get(n) || OUTRO, k = N.regCand, cn = nomeDe(k), ck = corDe(k);
+  const lista = [...areas].filter(([, a]) => a.validos > 0).map(([ib, a]) => {
+    const o = [...a.votos].sort((x, y) => y[1] - x[1]), v = a.votos.get(k) || 0, lid = o[0], seg = o[1], venceu = !!lid && lid[0] === k;
+    return {ib, a, o, lid, v, p: div(v, a.validos), venceu, margem: venceu ? v - (seg?.[1] || 0) : v - (lid?.[1] || 0)};
+  });
+  const nVenc = new Map(); for (const x of lista) if (x.lid) nVenc.set(x.lid[0], (nVenc.get(x.lid[0]) || 0) + 1);
+  const sinal = v => (v > 0 ? "+" : "") + int(v), grandes = lista.filter(x => x.a.validos >= 5000);
+  const item = (x, val, cls) => `<li data-cid="${x.a.id}" data-cuf="${x.a.uf}" data-nome="${esc(x.a.nome)}"><span>${esc(nome(x.a.nome))} <small>${x.a.uf.toUpperCase()}</small></span><b class="${cls}">${val}</b></li>`;
+  const rank = (l, f, n = 12) => `<ol class="rank-reg">${l.slice(0, n).map(f).join("") || `<li class="nota">nenhuma</li>`}</ol>`;
+  const qP = quebras(lista.map(x => x.p));
+  main.innerHTML = filtroRegioes() + `<h3 style="margin-top:4px">Região ${esc(reg)} · Presidente <span class="nota">${ufs.map(u => u.toUpperCase()).join(" · ")} · ${int(lista.length)} cidades</span></h3>
+    <div class="grade reg-cands">${top.slice(0, 4).map(c => `<button class="card pad reg-cand${c.n === k ? " ativo" : ""}" aria-pressed="${c.n === k}" data-reg-c="${c.n}" style="--c:${corDe(c.n)}"><b>${esc(nome(c.nome))}</b>
+      <span class="reg-pct">${pct((c.pct || 0) / 100)}</span><small>${int(c.votos)} votos · venceu em ${int(nVenc.get(c.n) || 0)} cidades</small></button>`).join("")}</div>
+    <div class="modos"><span class="rot">Pintar por</span><div class="seg">${[["lider", "Quem venceu"], ["pct", `% de ${cn}`], ["margem", `Saldo de ${cn}`]].map(([m, n]) => `<button data-reg-m="${m}" aria-pressed="${N.regModo === m}">${esc(n)}</button>`).join("")}</div>
+      <span class="nota">Toque num candidato acima para ver as cidades dele.</span></div>
+    <div class="mapa-wrap"><div><div class="mapa" id="mapaReg"></div><div class="legenda" id="legReg"></div><p class="nota">Por município, a partir dos boletins de urna do TSE. Clique numa cidade para o resultado completo.</p></div>
+      <div class="card pad"><h2 style="margin-bottom:10px">Cidades vencidas na região</h2>${rank([...nVenc].sort((a, b) => b[1] - a[1]), ([n, v]) => `<li><span><span class="bola" style="background:${corDe(n)}"></span> ${esc(nomeDe(n))}</span><b>${int(v)}</b></li>`, 8)}</div></div>
+    <div class="grade reg-listas">
+      <div class="card pad"><h2 class="pos">Onde ${esc(cn)} mais venceu <span class="nota">votos de vantagem sobre o 2º</span></h2>${rank(lista.filter(x => x.venceu).sort((a, b) => b.margem - a.margem), x => item(x, sinal(x.margem), "pos"))}</div>
+      <div class="card pad"><h2 class="neg">Onde ${esc(cn)} mais perdeu <span class="nota">votos atrás de quem venceu</span></h2>${rank(lista.filter(x => !x.venceu).sort((a, b) => a.margem - b.margem), x => item(x, sinal(x.margem) + ` <small>p/ ${esc(nomeDe(x.lid[0]))}</small>`, "neg"))}</div>
+      <div class="card pad"><h2>Maior % de ${esc(cn)} <span class="nota">cidades com 5 mil+ válidos</span></h2>${rank(grandes.slice().sort((a, b) => b.p - a.p), x => item(x, pct(x.p), "pos"))}</div>
+      <div class="card pad"><h2>Menor % de ${esc(cn)} <span class="nota">cidades com 5 mil+ válidos</span></h2>${rank(grandes.slice().sort((a, b) => a.p - b.p), x => item(x, pct(x.p), "neg"))}</div></div>
+    <h3>Todas as cidades da região <span class="nota">${int(lista.length)} · toque no título da coluna para ordenar</span></h3>
+    <div class="barra-ferr"><label class="busca"><input id="qReg" type="search" placeholder="Filtrar cidade ou estado" aria-label="Filtrar cidade ou estado" autocomplete="off"></label></div>
+    <div class="tab-wrap" style="max-height:620px"><table class="ordenavel" id="tabRegCid"><thead><tr><th>Cidade</th><th>UF</th><th aria-sort="descending">Eleitores</th><th>1º lugar</th><th>%</th><th>2º lugar</th><th>%</th><th>% de ${esc(cn)}</th><th>Saldo de ${esc(cn)}</th></tr></thead>
+    <tbody>${lista.sort((a, b) => b.a.eleitores - a.a.eleitores).map(x => { const c = i => x.o[i] ? `<td class="lider"><span class="bola" style="background:${corDe(x.o[i][0])}"></span>${esc(nomeDe(x.o[i][0]))}</td><td data-v="${div(x.o[i][1], x.a.validos)}">${pct(div(x.o[i][1], x.a.validos))}</td>` : `<td>–</td><td data-v="-1">–</td>`;
+      return `<tr data-cid="${x.a.id}" data-cuf="${x.a.uf}" data-nome="${esc(x.a.nome)}"><td>${esc(nome(x.a.nome))}</td><td>${x.a.uf.toUpperCase()}</td><td data-v="${x.a.eleitores}">${int(x.a.eleitores)}</td>${c(0)}${c(1)}<td data-v="${x.p ?? -1}">${pct(x.p)}</td><td data-v="${x.margem}" class="${x.margem > 0 ? "pos" : "neg"}">${sinal(x.margem)}</td></tr>`; }).join("")}</tbody></table></div>`;
+  ligarTabela();
+  $("#qReg").addEventListener("input", e => { const q = semAcento(e.target.value); for (const tr of $("#tabRegCid").tBodies[0].rows) tr.hidden = q && !semAcento(tr.cells[0].textContent + " " + tr.cells[1].textContent).includes(q); });
+  // mapa: só as cidades da região, com o contorno dos estados por cima
+  const porIb = new Map(lista.map(x => [x.ib, x]));
+  const qM = quebras(lista.map(x => x.margem));
+  const corM = v => v == null ? "#1a2129" : v > 0 ? (v > qM[3] && qM[3] > 0 ? "#2f9e6a" : "#7fc59b") : (v < qM[0] && qM[0] < 0 ? "#c0453a" : "#e59a91");
+  const m = novoMapa($("#mapaReg"));
+  const camada = L.geoJSON({type: "FeatureCollection", features: feats}, {
+    style: f => { const x = porIb.get(String(f.properties.codarea)); let fill = "#1a2129", op = .85;
+      if (x) { if (N.regModo === "lider") { fill = corDe(x.lid?.[0]); op = .45 + Math.min(.5, (div((x.o[0]?.[1] || 0) - (x.o[1]?.[1] || 0), x.a.validos) || 0) * 2.5); }
+        else if (N.regModo === "pct") fill = corRampa(x.p, qP); else fill = corM(x.margem); }
+      return {color: "rgba(220,230,235,.3)", weight: .3, fillColor: fill, fillOpacity: x ? op : .15}; },
+    onEachFeature: (f, l) => { const x = porIb.get(String(f.properties.codarea)); if (!x) return;
+      l.bindTooltip(dicaArea(x.a, 1, n => nomes.get(n)?.nomeUrna || "") + `<br><b>${esc(cn)}: ${pct(x.p)} · saldo ${sinal(x.margem)}</b>`, {className: "dica", sticky: true});
+      l.on("click", () => abrirCidade(x.a.uf, x.a.id, x.a.nome)); }}).addTo(m);
+  L.geoJSON({type: "FeatureCollection", features: gbr.features.filter(f => ufs.includes(IBGE_UF[f.properties.codarea]))}, {style: {color: "rgba(255,255,255,.75)", weight: 1.4, fill: false}, interactive: false}).addTo(m);
+  m.fitBounds(camada.getBounds(), {padding: [10, 10]});
+  $("#legReg").innerHTML = N.regModo === "lider" ? [...nVenc].sort((a, b) => b[1] - a[1]).map(([n]) => `<span><b style="background:${corDe(n)}"></b>${esc(nomeDe(n))}</span>`).join("") + `<span class="nota">Tom mais forte = vantagem maior</span>`
+    : N.regModo === "pct" ? legendaHTML("pct", qP).replace(/^<div class="legenda">|<\/div>$/g, "")
+    : [["#c0453a", "perdeu por muito"], ["#e59a91", "perdeu"], ["#7fc59b", "venceu"], ["#2f9e6a", "venceu por muito"]].map(([c, n]) => `<span><b style="background:${c}"></b>${n}</span>`).join("");
+}
+document.addEventListener("click", e => {
+  const f = e.target.closest("[data-reg-f]"); if (f) { irPara(f.dataset.regF ? "r:" + f.dataset.regF : "br", "regioes"); return; }
+  const c = e.target.closest("[data-reg-c]"); if (c) { N.regCand = Number(c.dataset.regC); render(); return; }
+  const m = e.target.closest("[data-reg-m]"); if (m) { N.regModo = m.dataset.regM; render(); return; }
+  const cid = e.target.closest("[data-cid][data-cuf]"); if (cid && cid.closest("#tabRegCid, .rank-reg")) abrirCidade(cid.dataset.cuf, Number(cid.dataset.cid), cid.dataset.nome);
+});
+
 async function viewRegioes(main) {
   const t = N.tok;
   if (N.cargo > 5) return viewBancadas(main, true);
+  if (N.cargo === 1 && regAtual()) return viewRegiao(main, regAtual());   // filtro por região: mapa e cidades só da região
   if (N.cargo === 1) {
     const cores = coresDe(N.D?.brasil);
     const top = (N.D?.brasil?.candidatos || []).slice(0, 4);
     const linhas = Object.keys(REGIOES).map(r => ({nome: "Região " + r, chave: "r:" + r, r: resumoEscopo(1, "r:" + r)}))
       .concat(Object.keys(NOMES).filter(u => ufsDoEscopo().includes(u) || !ehUF(N.escopo)).map(u => ({nome: NOMES[u], chave: u, r: N.D?.estados?.[u]?.presidente, reg: REGIAO_DE[u]})))
       .concat([{nome: "Exterior", chave: "zz", r: N.D?.estados?.zz?.presidente}]).filter(x => x.r);
-    main.innerHTML = `${N.escopo === "br" ? `<h3 style="margin-top:0">Regiões do Brasil</h3>${blocoRegioes()}` : ""}<h3>Presidente por região e estado</h3>
+    main.innerHTML = `${filtroRegioes()}${N.escopo === "br" ? `<h3 style="margin-top:0">Regiões do Brasil</h3>${blocoRegioes()}` : ""}<h3>Presidente por região e estado</h3>
       <div class="tab-wrap"><table class="ordenavel" id="tabReg"><thead><tr><th>Região / estado</th><th>Apurado</th>${top.map(c => `<th><span class="bola" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${cores.get(c.n)}"></span> ${esc(nome(c.nome))}</th>`).join("")}<th>Brancos</th><th>Nulos</th><th>Abstenção</th></tr></thead>
       <tbody>${linhas.map(({nome: n, chave, r, reg}) => {
         const v = new Map(r.candidatos.map(c => [c.n, c]));
